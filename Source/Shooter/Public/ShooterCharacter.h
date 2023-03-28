@@ -14,6 +14,10 @@ class UInputMappingContext;
 class UInputAction;
 class APlayerController;
 
+class USoundBase;
+class UParticleSystem;
+class UAnimMontage;
+
 UCLASS()
 class SHOOTER_API AShooterCharacter : public ACharacter
 {
@@ -36,6 +40,8 @@ protected:
 	void Look(const FInputActionValue& Value);
 	void ZoomIn();
 	void ZoomOut();
+	void FireWeapon();
+	bool GetBeamEndLocation(const FVector& MuzzleSocketLocation, FVector& OutBeamLocation);
 
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
@@ -56,8 +62,8 @@ protected:
 	//UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	//UInputAction* DodgeAction; // z
 
-	//UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-	//UInputAction* AttackAction; // click
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* AttackAction; // click
 
 	//UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	//UInputAction* EquipAction; // r
@@ -82,6 +88,13 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zoom")
 	float ZoomInOutAmount;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input")
+	float TargetArmLength = 300.f;
+
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Combat)
+	USoundBase* FireSound;
+
 
 private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
@@ -92,5 +105,17 @@ private:
 	
 	UPROPERTY()
 	APlayerController* PlayerController;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	UParticleSystem* MuzzleFlash;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	UAnimMontage* HipFireMontage;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	UParticleSystem* ImpactParticles;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	UParticleSystem* BeamParticles;
 
 };

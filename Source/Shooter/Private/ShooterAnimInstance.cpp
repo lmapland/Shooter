@@ -4,6 +4,7 @@
 #include "ShooterAnimInstance.h"
 #include "ShooterCharacter.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Kismet/KismetMathLibrary.h"
 
 void UShooterAnimInstance::UpdateAnimationProperties(float DeltaTime)
 {
@@ -17,7 +18,13 @@ void UShooterAnimInstance::UpdateAnimationProperties(float DeltaTime)
 		Velocity.Z = 0;
 		Speed = Velocity.Size();
 		bIsInAir = ShooterCharacter->GetCharacterMovement()->IsFalling();
-		if (ShooterCharacter->GetCharacterMovement()->GetCurrentAcceleration().Size() > 0) bIsAccelerating = true;
+		if (ShooterCharacter->GetCharacterMovement()->GetCurrentAcceleration().Size() > 0.f) bIsAccelerating = true;
+		else bIsAccelerating = false;
+
+		FRotator AimRotation = ShooterCharacter->GetBaseAimRotation();
+		FRotator MovementRotation = UKismetMathLibrary::MakeRotFromX(ShooterCharacter->GetVelocity());
+		MovementOffsetYaw = UKismetMathLibrary::NormalizedDeltaRotator(MovementRotation, AimRotation).Yaw;
+		LastMovementOffsetYaw = ShooterCharacter->GetVelocity().Size() == 0 ? LastMovementOffsetYaw : MovementOffsetYaw;
 	}
 }
 
