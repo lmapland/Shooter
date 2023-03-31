@@ -20,6 +20,7 @@ void UShooterAnimInstance::UpdateAnimationProperties(float DeltaTime)
 		bIsInAir = ShooterCharacter->GetCharacterMovement()->IsFalling();
 		if (ShooterCharacter->GetCharacterMovement()->GetCurrentAcceleration().Size() > 0.f) bIsAccelerating = true;
 		else bIsAccelerating = false;
+		bAiming = ShooterCharacter->GetAiming();
 
 		FRotator AimRotation = ShooterCharacter->GetBaseAimRotation();
 		FRotator MovementRotation = UKismetMathLibrary::MakeRotFromX(ShooterCharacter->GetVelocity());
