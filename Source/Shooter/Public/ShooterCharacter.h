@@ -13,10 +13,10 @@ class UCameraComponent;
 class UInputMappingContext;
 class UInputAction;
 class APlayerController;
-
 class USoundBase;
 class UParticleSystem;
 class UAnimMontage;
+class AItem;
 
 UCLASS()
 class SHOOTER_API AShooterCharacter : public ACharacter
@@ -36,6 +36,8 @@ public:
 	UFUNCTION(BlueprintCallable)
 	float GetCrosshairSpreadMultiplier() const;
 
+	void IncremementOverlappedItemCount(int8 Amount);
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
@@ -50,9 +52,18 @@ protected:
 	void CameraInterpZoom(float DeltaTime);
 	void CalculateCrosshairSpread(float DeltaTime);
 	void StartCrosshairBulletFire();
+	void FireButtonPressed();
+	void FireButtonReleased();
+	void StartFireTimer();
+
+	UFUNCTION()
+	void AutoFireReset();
 
 	UFUNCTION()
 	void FinishCrosshairBulletFire();
+
+	UFUNCTION()
+	bool TraceUnderCrosshairs(FHitResult& OutHitResult, FVector& OutHitLocation);
 
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
@@ -67,29 +78,17 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* AimAction; // mouse wheel scroll up
 
-	//UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-	//UInputAction* InteractAction; // e
-
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* JumpAction; // spacebar
 
-	//UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-	//UInputAction* DodgeAction; // z
-
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* AttackAction; // click
-
-	//UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-	//UInputAction* EquipAction; // r
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* ZoomInAction; // mouse wheel scroll up
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* ZoomOutAction; // mouse wheel scroll up
-
-	//UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
-	//UInputAction* SprintAction; // left shift
 
 	
 	/* Zooming */
@@ -111,6 +110,9 @@ protected:
 
 
 private:
+	void TraceForItems();
+	void TurnOffPickupWidget();
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
 	USpringArmComponent* CameraBoom;
 
@@ -147,26 +149,6 @@ private:
 	float ZoomInterpSpeed = 20.f;
 
 	/* Movement rates - Not aiming vs Aiming */
-	/* Arrow key left-right movement */
-	/*UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
-	float BaseTurnRate = 90.f;
-	
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
-	float HipTurnRate = 90.f;
-	
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
-	float AimingTurnRate = 20.f;*/
-
-	/* Arrow key up-down movement */
-	/*UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
-	float BaseLookUpRate = 90.f;
-	
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
-	float HipLookUpRate = 90.f;
-	
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
-	float AimingLookUpRate = 20.f;*/
-	
 	/* Mouse left-right movement */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
 	float BaseMouseTurnRate = 1.f;
@@ -208,7 +190,22 @@ private:
 	bool bFiringBullet = false;
 	FTimerHandle CrosshairShootTimer;
 
+	/* Auto fire */
+	bool bFireButtonPressed = false;
+	bool bShouldFire = true; // bool while timer is running
+	float AutomaticFireRate = 0.1f; // seconds between bullets firing
+	FTimerHandle AutoFireTimer;
+
+	/* true if we should trace every frame */
+	bool bShouldTraceForItems = false;
+	int8 OverlappedItemCount;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MouseOver", meta = (AllowPrivateAccess = "true"))
+	AItem* PreviousMousedOverItem;
+
 public:
 	FORCEINLINE bool GetAiming() const { return bAiming; }
+	FORCEINLINE int8 GetOverlappedItemCount() const { return OverlappedItemCount; }
+
 
 };
