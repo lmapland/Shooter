@@ -5,6 +5,7 @@
 #include "Components/BoxComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/WidgetComponent.h"
+#include "Widgets/PickupWidget.h"
 #include "ShooterCharacter.h"
 
 AItem::AItem()
@@ -33,8 +34,12 @@ void AItem::BeginPlay()
 	AreaSphere->OnComponentBeginOverlap.AddDynamic(this, &AItem::OnSphereOverlap);
 	AreaSphere->OnComponentEndOverlap.AddDynamic(this, &AItem::OnSphereEndOverlap);
 
-	if (PickupWidget) PickupWidget->SetVisibility(false);
-	SetActiveStars();
+	if (PickupWidget)
+	{
+		PickupWidget->SetVisibility(false);
+		UPickupWidget* ItemDetailsPanel = Cast<UPickupWidget>(PickupWidget->GetUserWidgetObject());
+		ItemDetailsPanel->Setup(this);
+	}
 }
 
 void AItem::OnSphereOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
@@ -52,15 +57,6 @@ void AItem::OnSphereEndOverlap(UPrimitiveComponent* OverlappedComponent, AActor*
 	if (AShooterCharacter* Shooter = Cast<AShooterCharacter>(OtherActor))
 	{
 		Shooter->IncremementOverlappedItemCount(-1);
-	}
-}
-
-void AItem::SetActiveStars()
-{
-	for (EItemRarity Rarity : TEnumRange<EItemRarity>())
-	{
-		if (Rarity <= ItemRarity) ActiveStars.Add(true);
-		else ActiveStars.Add(false);
 	}
 }
 

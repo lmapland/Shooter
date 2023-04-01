@@ -43,8 +43,6 @@ protected:
 	void OnSphereEndOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
 
 private:
-	void SetActiveStars();
-
 	/* Components of an Item */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
 	USkeletalMeshComponent* ItemMesh;
@@ -68,12 +66,8 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
 	EItemRarity ItemRarity = EItemRarity::EIR_Common;
 
-	/* To help the frontend know how many spheres to display */
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
-	TArray<bool> ActiveStars;
-
 public:
 	FORCEINLINE FString GetItemName() const { return ItemName; }
 	FORCEINLINE int32 GetItemCount() const { return ItemCount; }
-	FORCEINLINE TArray<bool> GetActiveStars() const { return ActiveStars; }
+	FORCEINLINE EItemRarity GetItemRarity() const { return ItemRarity; }
 };
