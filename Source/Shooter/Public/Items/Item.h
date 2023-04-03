@@ -18,6 +18,17 @@ enum class EItemRarity : uint8
 /* Add ability to iterate over the enums */
 ENUM_RANGE_BY_FIRST_AND_LAST(EItemRarity, EItemRarity::EIR_Damaged, EItemRarity::EIR_Legendary);
 
+UENUM(BlueprintType)
+enum class EItemState : uint8
+{
+	EIS_Equipped = 0 UMETA(DisplayName = "Equipped"),
+	EIS_Pickup = 1 UMETA(DisplayName = "Pickup"),
+	EIS_EquipInterping = 2 UMETA(DisplayName = "EquipInterping"),
+	EIS_PickedUp = 3 UMETA(DisplayName = "PickedUp"),
+	EIS_Falling = 4 UMETA(DisplayName = "Falling")
+
+};
+
 class UBoxComponent;
 class UWidgetComponent;
 class USphereComponent;
@@ -31,6 +42,7 @@ public:
 	AItem();
 	virtual void Tick(float DeltaTime) override;
 	void SetPickupWidgetVisibility(bool IsVisible);
+	void SetItemState(EItemState State);
 
 protected:
 	virtual void BeginPlay() override;
@@ -41,6 +53,8 @@ protected:
 
 	UFUNCTION()
 	void OnSphereEndOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
+
+	void SetItemProperties(EItemState State);
 
 private:
 	/* Components of an Item */
@@ -65,9 +79,14 @@ private:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
 	EItemRarity ItemRarity = EItemRarity::EIR_Common;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
+	EItemState ItemState = EItemState::EIS_Pickup;
 
 public:
 	FORCEINLINE FString GetItemName() const { return ItemName; }
 	FORCEINLINE int32 GetItemCount() const { return ItemCount; }
 	FORCEINLINE EItemRarity GetItemRarity() const { return ItemRarity; }
+	FORCEINLINE EItemState GetItemState() const { return ItemState; }
+	FORCEINLINE USkeletalMeshComponent* GetItemMesh() const { return ItemMesh; }
 };

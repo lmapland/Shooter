@@ -12,6 +12,7 @@
 #include "DrawDebugHelpers.h"
 #include "particles/ParticleSystemComponent.h"
 #include "Items/Item.h"
+#include "Items/Weapon.h"
 
 // Sets default values
 AShooterCharacter::AShooterCharacter()
@@ -52,6 +53,8 @@ void AShooterCharacter::BeginPlay()
 		CameraDefaultFOV = FollowCamera->FieldOfView;
 		CameraCurrentFOV = CameraDefaultFOV;
 	}
+
+	EquipWeapon(SpawnDefaultWeapon());
 
 	PlayerController = Cast<APlayerController>(GetController());
 
@@ -95,14 +98,14 @@ void AShooterCharacter::TraceForItems()
 	FVector HitLocation;
 	if (TraceUnderCrosshairs(ItemTraceResult, HitLocation))
 	{
-		AItem* HitItem = Cast<AItem>(ItemTraceResult.GetActor());
-		if (HitItem)
+		TraceHitItem = Cast<AItem>(ItemTraceResult.GetActor());
+		if (TraceHitItem)
 		{
-			if (PreviousMousedOverItem != HitItem)
+			if (PreviousMousedOverItem != TraceHitItem)
 			{
 				TurnOffPickupWidget();
-				HitItem->SetPickupWidgetVisibility(true);
-				PreviousMousedOverItem = HitItem;
+				TraceHitItem->SetPickupWidgetVisibility(true);
+				PreviousMousedOverItem = TraceHitItem;
 			}
 		}
 		else TurnOffPickupWidget();
@@ -201,6 +204,48 @@ bool AShooterCharacter::TraceUnderCrosshairs(FHitResult& OutHitResult, FVector& 
 	return false;
 }
 
+AWeapon* AShooterCharacter::SpawnDefaultWeapon()
+{
+	if (DefaultWeaponClass)
+	{
+		return GetWorld()->SpawnActor<AWeapon>(DefaultWeaponClass);
+	}
+	return nullptr;
+}
+
+void AShooterCharacter::EquipWeapon(AWeapon* ToEquip)
+{
+	if (ToEquip && ToEquip->GetItemState() == EItemState::EIS_Pickup)
+	{
+		const USkeletalMeshSocket* HandSocket = GetMesh()->GetSocketByName(FName("RightHandSocket"));
+		if (HandSocket)
+		{
+			HandSocket->AttachActor(ToEquip, GetMesh());
+		}
+		EquippedWeapon = ToEquip;
+		EquippedWeapon->SetItemState(EItemState::EIS_Equipped);
+	}
+}
+
+void AShooterCharacter::DropWeapon()
+{
+	if (EquippedWeapon)
+	{
+		FDetachmentTransformRules DetachmentRules(EDetachmentRule::KeepWorld, true);
+		EquippedWeapon->GetItemMesh()->DetachFromComponent(DetachmentRules);
+		EquippedWeapon->SetItemState(EItemState::EIS_Falling);
+		EquippedWeapon->ThrowWeapon();
+	}
+}
+
+void AShooterCharacter::SwapWeapon(AWeapon* WeaponToSwap)
+{
+	DropWeapon();
+	EquipWeapon(WeaponToSwap);
+	TraceHitItem = nullptr;
+	PreviousMousedOverItem = nullptr;
+}
+
 void AShooterCharacter::FireButtonPressed()
 {
 	bFireButtonPressed = true;
@@ -248,8 +293,9 @@ void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 		EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Started, this, &AShooterCharacter::FireButtonPressed);
 		EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Completed, this, &AShooterCharacter::FireButtonReleased);
 
-		/*EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Completed, this, &ASlashCharacter::Interact);
-		EnhancedInputComponent->BindAction(DodgeAction, ETriggerEvent::Triggered, this, &ASlashCharacter::Dodge);
+		EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &AShooterCharacter::InteractStart);
+		EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Completed, this, &AShooterCharacter::Interact);
+		/*EnhancedInputComponent->BindAction(DodgeAction, ETriggerEvent::Triggered, this, &ASlashCharacter::Dodge);
 		EnhancedInputComponent->BindAction(EquipAction, ETriggerEvent::Triggered, this, &ASlashCharacter::Equip);
 		EnhancedInputComponent->BindAction(OpenEverythingMenuAction, ETriggerEvent::Completed, this, &ASlashCharacter::OpenEverythingMenu);
 
@@ -296,6 +342,18 @@ void AShooterCharacter::Look(const FInputActionValue& Value)
 	AddControllerPitchInput(LookAxisValue.Y * BaseMouseLookUpRate);
 }
 
+void AShooterCharacter::InteractStart(const FInputActionValue& value)
+{
+	if (TraceHitItem)
+	{
+		auto TraceHitWeapon = Cast<AWeapon>(TraceHitItem);
+		SwapWeapon(TraceHitWeapon);
+	}
+}
+
+void AShooterCharacter::Interact(const FInputActionValue& value)
+{	
+}
 
 void AShooterCharacter::ZoomIn()
 {

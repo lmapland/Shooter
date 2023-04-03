@@ -17,6 +17,7 @@ class USoundBase;
 class UParticleSystem;
 class UAnimMontage;
 class AItem;
+class AWeapon;
 
 UCLASS()
 class SHOOTER_API AShooterCharacter : public ACharacter
@@ -43,6 +44,8 @@ protected:
 	virtual void BeginPlay() override;
 	void Move(const FInputActionValue& Value); // handles forward, back, and side-to-side
 	void Look(const FInputActionValue& Value);
+	void InteractStart(const FInputActionValue& value);
+	void Interact(const FInputActionValue& value);
 	void ZoomIn();
 	void ZoomOut();
 	void FireWeapon();
@@ -64,6 +67,11 @@ protected:
 
 	UFUNCTION()
 	bool TraceUnderCrosshairs(FHitResult& OutHitResult, FVector& OutHitLocation);
+
+	AWeapon* SpawnDefaultWeapon();
+	void EquipWeapon(AWeapon* ToEquip);
+	void DropWeapon();
+	void SwapWeapon(AWeapon* WeaponToSwap);
 
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
@@ -89,6 +97,9 @@ protected:
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* ZoomOutAction; // mouse wheel scroll up
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* InteractAction; // e
 
 	
 	/* Zooming */
@@ -203,9 +214,17 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "MouseOver", meta = (AllowPrivateAccess = "true"))
 	AItem* PreviousMousedOverItem;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	AWeapon* EquippedWeapon;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	TSubclassOf<AWeapon> DefaultWeaponClass;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	AItem* TraceHitItem;
+
 public:
 	FORCEINLINE bool GetAiming() const { return bAiming; }
 	FORCEINLINE int8 GetOverlappedItemCount() const { return OverlappedItemCount; }
-
 
 };
