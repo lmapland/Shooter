@@ -215,6 +215,7 @@ AWeapon* AShooterCharacter::SpawnDefaultWeapon()
 
 void AShooterCharacter::EquipWeapon(AWeapon* ToEquip)
 {
+	//UE_LOG(LogTemp, Warning, TEXT("In EquipWeapon(), weapon state: %i"), (uint8)ToEquip->GetItemState());
 	if (ToEquip && ToEquip->GetItemState() == EItemState::EIS_Pickup)
 	{
 		const USkeletalMeshSocket* HandSocket = GetMesh()->GetSocketByName(FName("RightHandSocket"));
@@ -321,6 +322,24 @@ void AShooterCharacter::IncremementOverlappedItemCount(int8 Amount)
 	else bShouldTraceForItems = true;
 }
 
+FVector AShooterCharacter::GetCameraInterpLocation()
+{
+	const FVector WorldLocation{ FollowCamera->GetComponentLocation() };
+	const FVector Forward{ FollowCamera->GetForwardVector() };
+
+
+	return WorldLocation + Forward * CameraInterpDistance + FVector(0.f, 0.f, CameraInterpElevation);
+}
+
+void AShooterCharacter::GetPickupItem(AItem* Item)
+{
+	auto Weapon = Cast<AWeapon>(Item);
+	if (Weapon)
+	{
+		SwapWeapon(Weapon);
+	}
+}
+
 void AShooterCharacter::Move(const FInputActionValue& Value)
 {
 	const FVector2D MovementVector = Value.Get<FVector2D>();
@@ -346,8 +365,7 @@ void AShooterCharacter::InteractStart(const FInputActionValue& value)
 {
 	if (TraceHitItem)
 	{
-		auto TraceHitWeapon = Cast<AWeapon>(TraceHitItem);
-		SwapWeapon(TraceHitWeapon);
+		TraceHitItem->StartItemCurve(this);
 	}
 }
 

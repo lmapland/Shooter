@@ -32,6 +32,7 @@ enum class EItemState : uint8
 class UBoxComponent;
 class UWidgetComponent;
 class USphereComponent;
+class AShooterCharacter;
 
 UCLASS()
 class SHOOTER_API AItem : public AActor
@@ -43,6 +44,7 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	void SetPickupWidgetVisibility(bool IsVisible);
 	void SetItemState(EItemState State);
+	void StartItemCurve(AShooterCharacter* Char);
 
 protected:
 	virtual void BeginPlay() override;
@@ -55,8 +57,11 @@ protected:
 	void OnSphereEndOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
 
 	void SetItemProperties(EItemState State);
+	void ItemInterp(float DeltaTime);
 
 private:
+	void FinishInterping();
+
 	/* Components of an Item */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
 	USkeletalMeshComponent* ItemMesh;
@@ -82,6 +87,36 @@ private:
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
 	EItemState ItemState = EItemState::EIS_Pickup;
+	
+	/* Setting the behavior when picking up items */
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
+	UCurveFloat* ItemZCurve;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
+	FVector ItemInterpStartLocation;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
+	FVector CameraTargetLocation;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
+	bool bInterping = false;
+
+	FTimerHandle ItemInterpTimer;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
+	float ZCurveTime = 0.7f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
+	AShooterCharacter* Character;
+
+	//float ItemInterpX = 0.f;
+	//float ItemInterpY = 0.f;
+
+	/* Offset between the camera and the interping item */
+	float InterpInitialYawOffset = 0.f;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
+	UCurveFloat* ItemScaleCurve;
 
 public:
 	FORCEINLINE FString GetItemName() const { return ItemName; }

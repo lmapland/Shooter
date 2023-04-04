@@ -18,6 +18,7 @@ class UParticleSystem;
 class UAnimMontage;
 class AItem;
 class AWeapon;
+class UCurveFloat;
 
 UCLASS()
 class SHOOTER_API AShooterCharacter : public ACharacter
@@ -38,6 +39,8 @@ public:
 	float GetCrosshairSpreadMultiplier() const;
 
 	void IncremementOverlappedItemCount(int8 Amount);
+	FVector GetCameraInterpLocation();
+	void GetPickupItem(AItem* Item);
 
 protected:
 	// Called when the game starts or when spawned
@@ -223,8 +226,17 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
 	AItem* TraceHitItem;
 
+	/* For picking up the item - distance item should interp to from camera*/
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
+	float CameraInterpDistance = 325.f;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
+	float CameraInterpElevation = 100.f;
+
+
 public:
 	FORCEINLINE bool GetAiming() const { return bAiming; }
 	FORCEINLINE int8 GetOverlappedItemCount() const { return OverlappedItemCount; }
+	FORCEINLINE UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 
 };
