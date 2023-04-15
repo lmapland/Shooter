@@ -5,7 +5,16 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "InputActionValue.h"
+#include "AmmoType.h"
 #include "ShooterCharacter.generated.h"
+
+UENUM(BlueprintType)
+enum class ECombatState : uint8
+{
+	ECS_Unoccupied = 0 UMETA(DisplayName = "Unoccupied"),
+	ECS_FireTimerInProgress = 1 UMETA(DisplayName = "FireTimerInProgress"),
+	ECS_Reloading = 2 UMETA(DisplayName = "Reloading")
+};
 
 class USpringArmComponent;
 class UInputComponent;
@@ -42,6 +51,10 @@ public:
 	FVector GetCameraInterpLocation();
 	void GetPickupItem(AItem* Item);
 
+	UFUNCTION(BlueprintCallable)
+	void FinishReloading();
+
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
@@ -53,8 +66,15 @@ protected:
 	void ZoomOut();
 	void FireWeapon();
 	bool GetBeamEndLocation(const FVector& MuzzleSocketLocation, FVector& OutBeamLocation);
+	void PlaySound(USoundBase* SoundToPlay);
+	void PlayMontageSection(UAnimMontage* Montage, FName SectionName);
+	void PlayCascadeParticles(UParticleSystem* ParticlesToPlay, FVector Location);
+	void PlayCascadeParticles(UParticleSystem* ParticlesToPlay, FTransform Location);
+	void SendBullet();
 	void AimingButtonPressed();
 	void AimingButtonReleased();
+	void ReloadButtonPressed();
+	void ReloadWeapon();
 	void CameraInterpZoom(float DeltaTime);
 	void CalculateCrosshairSpread(float DeltaTime);
 	void StartCrosshairBulletFire();
@@ -75,7 +95,16 @@ protected:
 	void EquipWeapon(AWeapon* ToEquip);
 	void DropWeapon();
 	void SwapWeapon(AWeapon* WeaponToSwap);
+	void InitializeAmmoMap();
+	bool WeaponHasAmmo();
+	/* Do we have any ammo of the kind that our Equipped Weapon takes? */
+	bool IsCarryingAmmo();
 
+	UFUNCTION(BlueprintCallable)
+	void GrabClip();
+	
+	UFUNCTION(BlueprintCallable)
+	void ReleaseClip();
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputMappingContext* CharMappingContext;
@@ -103,6 +132,9 @@ protected:
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* InteractAction; // e
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* ReloadAction; // r
 
 	
 	/* Zooming */
@@ -233,6 +265,27 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
 	float CameraInterpElevation = 100.f;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	TMap<EAmmoType, int32> AmmoMap;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	int32 StartingAmmo9mm = 10;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	int32 StartingAmmoAR = 10;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	ECombatState CombatState = ECombatState::ECS_Unoccupied;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	UAnimMontage* ReloadMontage;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	FTransform ClipTransform;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	USceneComponent* HandSceneComponent;
+	
 
 public:
 	FORCEINLINE bool GetAiming() const { return bAiming; }

@@ -36,6 +36,21 @@ void AWeapon::ThrowWeapon()
 	GetWorldTimerManager().SetTimer(ThrowWeaponTimer, this, &AWeapon::StopFalling, ThrowWeaponTime);
 }
 
+void AWeapon::DecrementAmmo()
+{
+	AmmoCount = FMath::Clamp(AmmoCount - 1, 0, 100'000);
+}
+
+void AWeapon::ReloadAmmo(int32 Amount)
+{
+	AmmoCount = FMath::Clamp(AmmoCount + Amount, 0, MagazineCapacity);
+}
+
+FTransform AWeapon::GetClipBoneTransform()
+{
+	return GetItemMesh()->GetBoneTransform(GetItemMesh()->GetBoneIndex(ClipBoneName));
+}
+
 void AWeapon::StopFalling()
 {
 	bFalling = false;

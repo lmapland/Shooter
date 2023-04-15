@@ -8,6 +8,8 @@
 #include "Widgets/PickupWidget.h"
 #include "ShooterCharacter.h"
 #include "Camera/CameraComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "Sound/SoundCue.h"
 
 AItem::AItem()
 {
@@ -77,6 +79,16 @@ void AItem::StartItemCurve(AShooterCharacter* Char)
 	GetWorldTimerManager().SetTimer(ItemInterpTimer, this, &AItem::FinishInterping, ZCurveTime);
 
 	InterpInitialYawOffset = GetActorRotation().Yaw - Character->GetFollowCamera()->GetComponentRotation().Yaw;
+}
+
+void AItem::PlayPickupSound()
+{
+	PlaySound(PickupSound);
+}
+
+void AItem::PlayEquipSound()
+{
+	PlaySound(EquipSound);
 }
 
 void AItem::OnSphereOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
@@ -194,5 +206,13 @@ void AItem::FinishInterping()
 	SetItemState(EItemState::EIS_Pickup);
 	if (Character) Character->GetPickupItem(this);
 	SetActorScale3D(FVector(1.f));
+}
+
+void AItem::PlaySound(USoundCue* SoundToPlay)
+{
+	if (SoundToPlay)
+	{
+		UGameplayStatics::PlaySound2D(this, SoundToPlay);
+	}
 }
 

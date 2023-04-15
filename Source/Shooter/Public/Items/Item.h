@@ -33,6 +33,8 @@ class UBoxComponent;
 class UWidgetComponent;
 class USphereComponent;
 class AShooterCharacter;
+class USoundCue;
+
 
 UCLASS()
 class SHOOTER_API AItem : public AActor
@@ -45,6 +47,8 @@ public:
 	void SetPickupWidgetVisibility(bool IsVisible);
 	void SetItemState(EItemState State);
 	void StartItemCurve(AShooterCharacter* Char);
+	void PlayPickupSound();
+	void PlayEquipSound();
 
 protected:
 	virtual void BeginPlay() override;
@@ -61,6 +65,7 @@ protected:
 
 private:
 	void FinishInterping();
+	void PlaySound(USoundCue* SoundToPlay);
 
 	/* Components of an Item */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
@@ -117,6 +122,13 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
 	UCurveFloat* ItemScaleCurve;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
+	USoundCue* PickupSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
+	USoundCue* EquipSound;
+
 
 public:
 	FORCEINLINE FString GetItemName() const { return ItemName; }
