@@ -27,9 +27,49 @@ void UShooterAnimInstance::UpdateAnimationProperties(float DeltaTime)
 		MovementOffsetYaw = UKismetMathLibrary::NormalizedDeltaRotator(MovementRotation, AimRotation).Yaw;
 		LastMovementOffsetYaw = ShooterCharacter->GetVelocity().Size() == 0 ? LastMovementOffsetYaw : MovementOffsetYaw;
 	}
+	TurnInPlace();
 }
 
 void UShooterAnimInstance::NativeInitializeAnimation()
 {
 	ShooterCharacter = Cast<AShooterCharacter>(TryGetPawnOwner());
+}
+
+void UShooterAnimInstance::TurnInPlace()
+{
+	if (ShooterCharacter == nullptr) return;
+	if (Speed > 0)
+	{
+		RootYawOffset = 0;
+		CurrentCharacterYaw = ShooterCharacter->GetActorRotation().Yaw;
+		PreviousCharacterYaw = CurrentCharacterYaw;
+		PreviousRotationCurve = 0.f;
+		CurrentRotationCurve = 0.f;
+		return;
+	}
+
+	PreviousCharacterYaw = CurrentCharacterYaw;
+	CurrentCharacterYaw = ShooterCharacter->GetActorRotation().Yaw;
+	const float YawDelta{ CurrentCharacterYaw - PreviousCharacterYaw };
+
+	RootYawOffset = UKismetMathLibrary::NormalizeAxis(RootYawOffset - YawDelta);
+
+	// 1.0 if turning, 0.0 if not
+	const float Turning{ GetCurveValue(TEXT("Turning")) };
+	if (Turning > 0)
+	{
+		PreviousRotationCurve = CurrentRotationCurve;
+		CurrentRotationCurve = GetCurveValue(TEXT("Rotation"));
+		const float DeltaRotation = CurrentRotationCurve - PreviousRotationCurve;
+
+		// RootYawOffset > 0: turning left. Otherwise currently turning right
+		RootYawOffset > 0 ? RootYawOffset -= DeltaRotation : RootYawOffset += DeltaRotation;
+
+		const float ABSRootYawOffset{ FMath::Abs(RootYawOffset) };
+		if (ABSRootYawOffset > 90.f)
+		{
+			const float YawExcess{ ABSRootYawOffset - 90.f };
+			RootYawOffset > 0 ? RootYawOffset -= YawExcess : RootYawOffset += YawExcess;
+		}
+	}
 }

@@ -21,12 +21,15 @@ public:
 
 	virtual void NativeInitializeAnimation() override;
 
+protected:
+	void TurnInPlace();
+
 private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement, meta = (AllowPrivateAccess = "true"))
 	AShooterCharacter* ShooterCharacter;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement, meta = (AllowPrivateAccess = "true"))
-	float Speed = 0;
+	float Speed = 0.f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement, meta = (AllowPrivateAccess = "true"))
 	bool bIsInAir = false;
@@ -35,13 +38,21 @@ private:
 	bool bIsAccelerating = false;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Movement, meta = (AllowPrivateAccess = "true"))
-	float MovementOffsetYaw;
+	float MovementOffsetYaw = 0.f;
 	
 	/* For the JogStop ABP - we can't use ^ that variable because Velocity goes to 0 when the user stops pressing keys */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Movement, meta = (AllowPrivateAccess = "true"))
-	float LastMovementOffsetYaw;
+	float LastMovementOffsetYaw = 0.f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement, meta = (AllowPrivateAccess = "true"))
-	bool bAiming;
+	bool bAiming = false;
 
+	float PreviousCharacterYaw = 0.f;
+	float CurrentCharacterYaw = 0.f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Turn in Place", meta = (AllowPrivateAccess = "true"))
+	float RootYawOffset;
+
+	float CurrentRotationCurve;
+	float PreviousRotationCurve;
 };
