@@ -67,4 +67,5 @@ public:
 	FORCEINLINE EWeaponType GetWeaponType() const { return WeaponType; }
 	FORCEINLINE FName GetReloadSectionName() const { return ReloadMontageSection; }
 	FORCEINLINE void SetClipIsMoving(bool Move) { bMovingClip = Move; }
+	FORCEINLINE bool CanReload() const { return MagazineCapacity > AmmoCount; }
 };

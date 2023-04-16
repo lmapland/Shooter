@@ -6,6 +6,15 @@
 #include "Animation/AnimInstance.h"
 #include "ShooterAnimInstance.generated.h"
 
+UENUM(BlueprintType)
+enum class EOffsetState : uint8
+{
+	EOS_Aiming UMETA(DisplayName = "Aiming"),
+	EOS_Hip UMETA(DisplayName = "Hip"),
+	EOS_Reloading UMETA(DisplayName = "Reloading"),
+	EOS_InAir UMETA(DisplayName = "InAir")
+};
+
 class AShooterCharacter;
 
 /**
@@ -23,6 +32,7 @@ public:
 
 protected:
 	void TurnInPlace();
+	void Lean(float DeltaTime);
 
 private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement, meta = (AllowPrivateAccess = "true"))
@@ -47,12 +57,32 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Movement, meta = (AllowPrivateAccess = "true"))
 	bool bAiming = false;
 
-	float PreviousCharacterYaw = 0.f;
-	float CurrentCharacterYaw = 0.f;
+	/* Turn in place variables - not updated when moving or inAir */
+	float TIPPreviousCharacterYaw = 0.f;
+	float TIPCurrentCharacterYaw = 0.f;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Turn in Place", meta = (AllowPrivateAccess = "true"))
-	float RootYawOffset;
+	float RootYawOffset = 0.0f;
 
 	float CurrentRotationCurve;
 	float PreviousRotationCurve;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Turn in Place", meta = (AllowPrivateAccess = "true"))
+	float Pitch = 0.0f;
+
+	/* We'd like the character to go back to their front pose while they are reloading, ignoring aim offset */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Turn in Place", meta = (AllowPrivateAccess = "true"))
+	bool bIsReloading = false;
+
+	/* Used for determining which Aim Offset to use */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Turn in Place", meta = (AllowPrivateAccess = "true"))
+	EOffsetState OffsetState = EOffsetState::EOS_Hip;
+
+	/* For leaning during movement */
+	FRotator PreviousCharacterRotation = FRotator(0.f);
+	FRotator CurrentCharacterRotation = FRotator(0.f);
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Lean", meta = (AllowPrivateAccess = "true"))
+	float YawDelta = 0.f;
+
 };
