@@ -2,6 +2,7 @@
 
 
 #include "ShooterCharacter.h"
+#include "Components/CapsuleComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Camera/CameraComponent.h"
@@ -24,7 +25,7 @@ AShooterCharacter::AShooterCharacter()
 	CameraBoom->SetupAttachment(GetRootComponent());
 	CameraBoom->TargetArmLength = TargetArmLength;
 	CameraBoom->bUsePawnControlRotation = true;
-	CameraBoom->SocketOffset = FVector(0.f, 50.f, 70.f);
+	CameraBoom->SocketOffset = CameraOffset;
 
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom);
@@ -37,6 +38,7 @@ AShooterCharacter::AShooterCharacter()
 	GetCharacterMovement()->RotationRate = FRotator(0.f, 540.f, 0.f);
 	GetCharacterMovement()->JumpZVelocity = 600.f;
 	GetCharacterMovement()->AirControl = 0.2f;
+	GetCharacterMovement()->GroundFriction = 2.f;
 
 	HandSceneComponent = CreateDefaultSubobject<USceneComponent>("HandSceneComponent");
 	FAttachmentTransformRules AttachmentRules(EAttachmentRule::KeepRelative, true);
@@ -72,13 +74,13 @@ void AShooterCharacter::BeginPlay()
 	}
 
 	InitializeAmmoMap();
+	GetCharacterMovement()->MaxWalkSpeed = BaseMovementSpeed;
 }
 
 void AShooterCharacter::Jump()
 {
-	// if (ActionState != EActionState::EAS_Unoccupied && ActionState != EActionState::EAS_Attacking) return;
-
-	Super::Jump();
+	if (bCrouching) CrouchButtonPressed();
+	else Super::Jump();
 }
 
 // Called every frame
@@ -90,6 +92,7 @@ void AShooterCharacter::Tick(float DeltaTime)
 	CalculateCrosshairSpread(DeltaTime);
 
 	TraceForItems();
+	InterpCapsuleHalfHeight(DeltaTime);
 }
 
 void AShooterCharacter::TraceForItems()
@@ -126,6 +129,37 @@ void AShooterCharacter::TurnOffPickupWidget()
 		PreviousMousedOverItem->SetPickupWidgetVisibility(false);
 		PreviousMousedOverItem = nullptr;
 	}
+}
+
+/* Shrinks the capsule's half height while elevating the character so they do not stand beneath the ground */
+void AShooterCharacter::InterpCapsuleHalfHeight(float DeltaTime)
+{
+	// negative value if crouching, positive if standing
+	CurrentCapsuleHalfHeight = FMath::FInterpTo(GetCapsuleComponent()->GetScaledCapsuleHalfHeight(), TargetCapsuleHalfHeight, DeltaTime, 15.f);
+
+	GetMesh()->AddLocalOffset(FVector(0.f, 0.f, -(CurrentCapsuleHalfHeight - GetCapsuleComponent()->GetScaledCapsuleHalfHeight())));
+	GetCapsuleComponent()->SetCapsuleHalfHeight(CurrentCapsuleHalfHeight);
+}
+
+void AShooterCharacter::Aim()
+{
+	bAiming = true;
+
+	BaseMouseTurnRate = MouseAimingTurnRate;
+	BaseMouseLookUpRate = MouseAimingLookUpRate;
+
+	GetCharacterMovement()->MaxWalkSpeed = AimingMovementSpeed;
+}
+
+void AShooterCharacter::StopAiming()
+{
+	bAiming = false;
+
+	BaseMouseTurnRate = MouseHipTurnRate;
+	BaseMouseLookUpRate = MouseHipLookUpRate;
+
+	if (bCrouching) GetCharacterMovement()->MaxWalkSpeed = CrouchMovementSpeed;
+	else GetCharacterMovement()->MaxWalkSpeed = BaseMovementSpeed;
 }
 
 void AShooterCharacter::CameraInterpZoom(float DeltaTime)
@@ -317,15 +351,15 @@ void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 		EnhancedInputComponent->BindAction(AimAction, ETriggerEvent::Started, this, &AShooterCharacter::AimingButtonPressed);
 		EnhancedInputComponent->BindAction(AimAction, ETriggerEvent::Completed, this, &AShooterCharacter::AimingButtonReleased);
 
-		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Triggered, this, &AShooterCharacter::Jump);
+		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &AShooterCharacter::Jump);
 		EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Started, this, &AShooterCharacter::FireButtonPressed);
 		EnhancedInputComponent->BindAction(AttackAction, ETriggerEvent::Completed, this, &AShooterCharacter::FireButtonReleased);
 
 		EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Started, this, &AShooterCharacter::InteractStart);
 		EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Completed, this, &AShooterCharacter::Interact);
 		EnhancedInputComponent->BindAction(ReloadAction, ETriggerEvent::Triggered, this, &AShooterCharacter::ReloadButtonPressed);
-		/*EnhancedInputComponent->BindAction(DodgeAction, ETriggerEvent::Triggered, this, &ASlashCharacter::Dodge);
-		EnhancedInputComponent->BindAction(OpenEverythingMenuAction, ETriggerEvent::Completed, this, &ASlashCharacter::OpenEverythingMenu);
+		EnhancedInputComponent->BindAction(CrouchAction, ETriggerEvent::Started, this, &AShooterCharacter::CrouchButtonPressed);
+		/*EnhancedInputComponent->BindAction(OpenEverythingMenuAction, ETriggerEvent::Completed, this, &ASlashCharacter::OpenEverythingMenu);
 
 		EnhancedInputComponent->BindAction(BlockAction, ETriggerEvent::Started, this, &ASlashCharacter::Block);
 		EnhancedInputComponent->BindAction(BlockAction, ETriggerEvent::Completed, this, &ASlashCharacter::EndBlock);
@@ -416,6 +450,26 @@ void AShooterCharacter::ZoomOut()
 	if (CameraBoom->TargetArmLength <= MaxZoomLength)
 	{
 		CameraBoom->TargetArmLength += ZoomInOutAmount;
+	}
+}
+
+void AShooterCharacter::CrouchButtonPressed()
+{
+	if (GetCharacterMovement()->IsFalling()) return;
+
+	if (!bCrouching)
+	{
+		GetCharacterMovement()->MaxWalkSpeed = CrouchMovementSpeed;
+		bCrouching = true;
+		TargetCapsuleHalfHeight = CrouchingCapsuleHalfHeight;
+		GetCharacterMovement()->GroundFriction = CrouchGroundFriction;
+	}
+	else
+	{
+		GetCharacterMovement()->MaxWalkSpeed = BaseMovementSpeed;
+		bCrouching = false;
+		TargetCapsuleHalfHeight = StandingCapsuleHalfHeight;
+		GetCharacterMovement()->GroundFriction = BaseGroundFriction;
 	}
 }
 
@@ -517,20 +571,19 @@ void AShooterCharacter::SendBullet()
 		}
 	}
 }
+
 void AShooterCharacter::AimingButtonPressed()
 {
-	bAiming = true;
+	bAimingButtonPressed = true;
 
-	BaseMouseTurnRate = MouseAimingTurnRate;
-	BaseMouseLookUpRate = MouseAimingLookUpRate;
+	if (CombatState != ECombatState::ECS_Reloading)	Aim();
 }
 
 void AShooterCharacter::AimingButtonReleased()
 {
-	bAiming = false;
+	bAimingButtonPressed = false;
 
-	BaseMouseTurnRate = MouseHipTurnRate;
-	BaseMouseLookUpRate = MouseHipLookUpRate;
+	StopAiming();
 }
 
 void AShooterCharacter::ReloadButtonPressed()
@@ -545,6 +598,8 @@ void AShooterCharacter::ReloadWeapon()
 	if (IsCarryingAmmo() && EquippedWeapon->CanReload())
 	{
 		CombatState = ECombatState::ECS_Reloading;
+
+		if (bAiming) StopAiming();
 
 		PlayMontageSection(ReloadMontage, EquippedWeapon->GetReloadSectionName());
 	}
@@ -569,6 +624,9 @@ void AShooterCharacter::FinishReloading()
 		EquippedWeapon->ReloadAmmo(AmmoToAdd);
 		AmmoMap[AmmoType] = AmmoMap[AmmoType] - AmmoToAdd;
 	}
+
+	if (bAimingButtonPressed) Aim();
+
 }
 
 /*

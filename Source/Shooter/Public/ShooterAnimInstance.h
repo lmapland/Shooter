@@ -84,5 +84,12 @@ private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Lean", meta = (AllowPrivateAccess = "true"))
 	float YawDelta = 0.f;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Crouching", meta = (AllowPrivateAccess = "true"))
+	bool bCrouching = false;
+
+	/* Recoiling looks weird when character is turning in place. We want it on when the character is standing still, though */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Recoil", meta = (AllowPrivateAccess = "true"))
+	float RecoilWeight = 1.f;
 
 };

@@ -56,7 +56,6 @@ public:
 
 
 protected:
-	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 	void Move(const FInputActionValue& Value); // handles forward, back, and side-to-side
 	void Look(const FInputActionValue& Value);
@@ -64,6 +63,7 @@ protected:
 	void Interact(const FInputActionValue& value);
 	void ZoomIn();
 	void ZoomOut();
+	void CrouchButtonPressed();
 	void FireWeapon();
 	bool GetBeamEndLocation(const FVector& MuzzleSocketLocation, FVector& OutBeamLocation);
 	void PlaySound(USoundBase* SoundToPlay);
@@ -135,6 +135,9 @@ protected:
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* ReloadAction; // r
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* CrouchAction; // l-shift
 
 	
 	/* Zooming */
@@ -158,6 +161,9 @@ protected:
 private:
 	void TraceForItems();
 	void TurnOffPickupWidget();
+	void InterpCapsuleHalfHeight(float DeltaTime);
+	void Aim();
+	void StopAiming();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
 	USpringArmComponent* CameraBoom;
@@ -181,8 +187,16 @@ private:
 	UParticleSystem* BeamParticles;
 
 	/* Camera info */
+	/*
+	* Decouple whether the character is aiming from whether the aiming button is pressed.
+	* There are situations like while reloading where we want to stop aiming
+	* but then we need to know if the aiming button is pressed to decide what to do
+	* when the reloading anim is complete.
+	*/
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
 	bool bAiming = false;
+
+	bool bAimingButtonPressed = false;
 
 	float CameraDefaultFOV = 0.f;
 
@@ -285,12 +299,41 @@ private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
 	USceneComponent* HandSceneComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement", meta = (AllowPrivateAccess = "true"))
+	bool bCrouching = false;
+
+	float BaseMovementSpeed = 650.f;
+	float CrouchMovementSpeed = 400.f;
+	float AimingMovementSpeed = 400.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement", meta = (AllowPrivateAccess = "true"))
+	float CurrentCapsuleHalfHeight = 88.f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement", meta = (AllowPrivateAccess = "true"))
+	float TargetCapsuleHalfHeight = 88.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement", meta = (AllowPrivateAccess = "true"))
+	float StandingCapsuleHalfHeight = 88.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement", meta = (AllowPrivateAccess = "true"))
+	float CrouchingCapsuleHalfHeight = 44.f;
 	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement", meta = (AllowPrivateAccess = "true"))
+	float BaseGroundFriction = 2.f;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement", meta = (AllowPrivateAccess = "true"))
+	float CrouchGroundFriction = 8.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera Location", meta = (AllowPrivateAccess = "true"))
+	FVector CameraOffset{ 0.f, 45.f, 70.f };
+
 
 public:
 	FORCEINLINE bool GetAiming() const { return bAiming; }
 	FORCEINLINE int8 GetOverlappedItemCount() const { return OverlappedItemCount; }
 	FORCEINLINE UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 	FORCEINLINE ECombatState GetCombatState() const { return CombatState; }
+	FORCEINLINE bool GetCrouching() const { return bCrouching; }
 
 };
