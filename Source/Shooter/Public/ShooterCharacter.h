@@ -16,6 +16,18 @@ enum class ECombatState : uint8
 	ECS_Reloading = 2 UMETA(DisplayName = "Reloading")
 };
 
+USTRUCT(BlueprintType)
+struct FInterpLocation
+{
+	GENERATED_BODY()
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	TObjectPtr<USceneComponent> SceneComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	int32 ItemCount;
+};
+
 class USpringArmComponent;
 class UInputComponent;
 class UCameraComponent;
@@ -27,6 +39,7 @@ class UParticleSystem;
 class UAnimMontage;
 class AItem;
 class AWeapon;
+class AAmmo;
 class UCurveFloat;
 
 UCLASS()
@@ -48,11 +61,15 @@ public:
 	float GetCrosshairSpreadMultiplier() const;
 
 	void IncremementOverlappedItemCount(int8 Amount);
-	FVector GetCameraInterpLocation();
 	void GetPickupItem(AItem* Item);
 
 	UFUNCTION(BlueprintCallable)
 	void FinishReloading();
+
+	FInterpLocation GetInterpLocation(int32 Index);
+	int32 GetInterpLocationIndex();
+	void UseInterpLocation(int32 Index);
+	void FreeInterpLocation(int32 Index);
 
 
 protected:
@@ -105,7 +122,7 @@ protected:
 	
 	UFUNCTION(BlueprintCallable)
 	void ReleaseClip();
-	
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputMappingContext* CharMappingContext;
 
@@ -164,6 +181,8 @@ private:
 	void InterpCapsuleHalfHeight(float DeltaTime);
 	void Aim();
 	void StopAiming();
+	void PickupAmmo(AAmmo* Ammo);
+	void InitializeInterpLocations();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
 	USpringArmComponent* CameraBoom;
@@ -327,7 +346,30 @@ private:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Camera Location", meta = (AllowPrivateAccess = "true"))
 	FVector CameraOffset{ 0.f, 45.f, 70.f };
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USceneComponent> WeaponInterpComp;
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USceneComponent> InterpComp1;
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USceneComponent> InterpComp2;
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USceneComponent> InterpComp3;
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USceneComponent> InterpComp4;
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USceneComponent> InterpComp5;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USceneComponent> InterpComp6;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
+	TArray<FInterpLocation> InterpLocations;
 
 public:
 	FORCEINLINE bool GetAiming() const { return bAiming; }

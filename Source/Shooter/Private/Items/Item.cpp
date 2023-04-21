@@ -5,7 +5,6 @@
 #include "Components/BoxComponent.h"
 #include "Components/SphereComponent.h"
 #include "Components/WidgetComponent.h"
-#include "Widgets/PickupWidget.h"
 #include "ShooterCharacter.h"
 #include "Camera/CameraComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -44,13 +43,6 @@ void AItem::BeginPlay()
 	AreaSphere->OnComponentBeginOverlap.AddDynamic(this, &AItem::OnSphereOverlap);
 	AreaSphere->OnComponentEndOverlap.AddDynamic(this, &AItem::OnSphereEndOverlap);
 
-	if (PickupWidget)
-	{
-		PickupWidget->SetVisibility(false);
-		UPickupWidget* ItemDetailsPanel = Cast<UPickupWidget>(PickupWidget->GetUserWidgetObject());
-		ItemDetailsPanel->Setup(this);
-	}
-
 	SetItemProperties(ItemState);
 }
 
@@ -71,10 +63,14 @@ void AItem::SetItemState(EItemState State)
 void AItem::StartItemCurve(AShooterCharacter* Char)
 {
 	Character = Char;
+	InterpLocIndex = Character->GetInterpLocationIndex();
+	Character->UseInterpLocation(InterpLocIndex);
 
 	ItemInterpStartLocation = GetActorLocation();
 	bInterping = true;
 	SetItemState(EItemState::EIS_EquipInterping);
+
+	PlayPickupSound();
 
 	GetWorldTimerManager().SetTimer(ItemInterpTimer, this, &AItem::FinishInterping, ZCurveTime);
 
@@ -83,12 +79,20 @@ void AItem::StartItemCurve(AShooterCharacter* Char)
 
 void AItem::PlayPickupSound()
 {
+	//if (!GetWorldTimerManager().IsTimerActive(PickupSoundTimer))
+	//{
+		//GetWorldTimerManager().SetTimer(PickupSoundTimer, this, &AItem::ResetSoundTimers, PickupSoundTimeout);
 	PlaySound(PickupSound);
+	//}
 }
 
 void AItem::PlayEquipSound()
 {
+	//if (!GetWorldTimerManager().IsTimerActive(EquipSoundTimer))
+	//{
+		//GetWorldTimerManager().SetTimer(EquipSoundTimer, this, &AItem::ResetSoundTimers, EquipSoundTimeout);
 	PlaySound(EquipSound);
+	//}
 }
 
 void AItem::OnSphereOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
@@ -128,7 +132,7 @@ void AItem::SetItemProperties(EItemState State)
 		CollisionBox->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 		break;
 	case EItemState::EIS_Equipped:
-		PickupWidget->SetVisibility(false);
+		if (PickupWidget) PickupWidget->SetVisibility(false);
 
 		ItemMesh->SetSimulatePhysics(false);
 		ItemMesh->SetEnableGravity(false);
@@ -156,7 +160,7 @@ void AItem::SetItemProperties(EItemState State)
 		CollisionBox->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		break;
 	case EItemState::EIS_EquipInterping:
-		PickupWidget->SetVisibility(false);
+		if (PickupWidget) PickupWidget->SetVisibility(false);
 		ItemMesh->SetSimulatePhysics(false);
 		ItemMesh->SetEnableGravity(false);
 		ItemMesh->SetVisibility(true);
@@ -181,7 +185,7 @@ void AItem::ItemInterp(float DeltaTime)
 		const float ElapsedTime = GetWorldTimerManager().GetTimerElapsed(ItemInterpTimer);
 
 		FVector ItemLocation = ItemInterpStartLocation;
-		const FVector CameraInterpLocation{ Character->GetCameraInterpLocation() };
+		const FVector CameraInterpLocation{ GetInterpLocation() };
 
 		ItemLocation.Z += ItemZCurve->GetFloatValue(ElapsedTime) * FVector(0.f, 0.f, (CameraInterpLocation - ItemInterpStartLocation).Z).Size();
 		ItemLocation.X = FMath::FInterpTo(GetActorLocation().X, CameraInterpLocation.X, DeltaTime, 30.f);
@@ -200,11 +204,36 @@ void AItem::ItemInterp(float DeltaTime)
 	}
 }
 
+// TODO: make this a virtual function and have the child classes override it to return the correct thing
+// overall this is hacky anyway; Item shouldn't need to know that the returned has a scene component
+// it should just receive the location... but then how would it free the location after?
+FVector AItem::GetInterpLocation()
+{
+	if (Character == nullptr) return FVector(0.f);
+	switch (ItemType)
+	{
+	case EItemType::EIT_Ammo:
+		return Character->GetInterpLocation(InterpLocIndex).SceneComponent->GetComponentLocation();
+		break;
+	case EItemType::EIT_Weapon:
+		return Character->GetInterpLocation(0).SceneComponent->GetComponentLocation();
+		break;
+	default:
+		break;
+	}
+
+	return FVector(0.f);
+}
+
 void AItem::FinishInterping()
 {
 	bInterping = false;
 	SetItemState(EItemState::EIS_Pickup);
-	if (Character) Character->GetPickupItem(this);
+	if (Character)
+	{
+		Character->GetPickupItem(this);
+		Character->FreeInterpLocation(InterpLocIndex);
+	}
 	SetActorScale3D(FVector(1.f));
 }
 
@@ -215,4 +244,3 @@ void AItem::PlaySound(USoundCue* SoundToPlay)
 		UGameplayStatics::PlaySound2D(this, SoundToPlay);
 	}
 }
-

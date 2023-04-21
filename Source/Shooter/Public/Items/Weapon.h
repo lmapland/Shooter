@@ -32,6 +32,7 @@ public:
 
 protected:
 	void StopFalling();
+	virtual void BeginPlay() override;
 
 private:
 	FTimerHandle ThrowWeaponTimer;

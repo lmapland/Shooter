@@ -2,6 +2,8 @@
 
 
 #include "Items/Weapon.h"
+#include "Components/WidgetComponent.h"
+#include "Widgets/PickupWidget.h"
 
 AWeapon::AWeapon()
 {
@@ -55,4 +57,23 @@ void AWeapon::StopFalling()
 {
 	bFalling = false;
 	SetItemState(EItemState::EIS_Pickup);
+}
+
+void AWeapon::BeginPlay()
+{
+	Super::BeginPlay();
+
+	if (PickupWidget)
+	{
+		if (PickupWidget->GetUserWidgetObject()) // if this is not set this code will crash
+		{
+			PickupWidget->SetVisibility(false);
+			UPickupWidget* ItemDetailsPanel = Cast<UPickupWidget>(PickupWidget->GetUserWidgetObject());
+			ItemDetailsPanel->Setup(this);
+		}
+		else // this is a common bug; let the user know that they need to do something
+		{
+			UE_LOG(LogTemp, Warning, TEXT("There is NO WidgetClass Set in PickupWidget > User Interface > Widget Class"));
+		}
+	}
 }

@@ -14,6 +14,7 @@
 #include "particles/ParticleSystemComponent.h"
 #include "Items/Item.h"
 #include "Items/Weapon.h"
+#include "Items/Ammo.h"
 
 // Sets default values
 AShooterCharacter::AShooterCharacter()
@@ -41,8 +42,21 @@ AShooterCharacter::AShooterCharacter()
 	GetCharacterMovement()->GroundFriction = 2.f;
 
 	HandSceneComponent = CreateDefaultSubobject<USceneComponent>("HandSceneComponent");
-	FAttachmentTransformRules AttachmentRules(EAttachmentRule::KeepRelative, true);
-	HandSceneComponent->AttachToComponent(GetMesh(), AttachmentRules, FName("Hand_L"));
+
+	WeaponInterpComp = CreateDefaultSubobject<USceneComponent>(TEXT("Weapon InterpolationComponent"));
+	WeaponInterpComp->SetupAttachment(GetFollowCamera());
+	InterpComp1 = CreateDefaultSubobject<USceneComponent>(TEXT("Interp Component 1"));
+	InterpComp1->SetupAttachment(GetFollowCamera());
+	InterpComp2 = CreateDefaultSubobject<USceneComponent>(TEXT("Interp Component 2"));
+	InterpComp2->SetupAttachment(GetFollowCamera());
+	InterpComp3 = CreateDefaultSubobject<USceneComponent>(TEXT("Interp Component 3"));
+	InterpComp3->SetupAttachment(GetFollowCamera());
+	InterpComp4 = CreateDefaultSubobject<USceneComponent>(TEXT("Interp Component 4"));
+	InterpComp4->SetupAttachment(GetFollowCamera());
+	InterpComp5 = CreateDefaultSubobject<USceneComponent>(TEXT("Interp Component 5"));
+	InterpComp5->SetupAttachment(GetFollowCamera());
+	InterpComp6 = CreateDefaultSubobject<USceneComponent>(TEXT("Interp Component 6"));
+	InterpComp6->SetupAttachment(GetFollowCamera());
 
 	MinZoomLength = 100.f;
 	MaxZoomLength = 600.f;
@@ -75,6 +89,7 @@ void AShooterCharacter::BeginPlay()
 
 	InitializeAmmoMap();
 	GetCharacterMovement()->MaxWalkSpeed = BaseMovementSpeed;
+	InitializeInterpLocations();
 }
 
 void AShooterCharacter::Jump()
@@ -160,6 +175,31 @@ void AShooterCharacter::StopAiming()
 
 	if (bCrouching) GetCharacterMovement()->MaxWalkSpeed = CrouchMovementSpeed;
 	else GetCharacterMovement()->MaxWalkSpeed = BaseMovementSpeed;
+}
+
+void AShooterCharacter::PickupAmmo(AAmmo* Ammo)
+{
+	if (AmmoMap.Find(Ammo->GetAmmoType()))
+	{
+		AmmoMap[Ammo->GetAmmoType()] += Ammo->GetItemCount();
+	}
+	else
+	{
+		AmmoMap.Add(Ammo->GetAmmoType(), Ammo->GetItemCount());
+	}
+
+	Ammo->Destroy();
+}
+
+void AShooterCharacter::InitializeInterpLocations()
+{
+	InterpLocations.Add(FInterpLocation{ WeaponInterpComp, 0 });
+	InterpLocations.Add(FInterpLocation{ InterpComp1, 0 });
+	InterpLocations.Add(FInterpLocation{ InterpComp2, 0 });
+	InterpLocations.Add(FInterpLocation{ InterpComp3, 0 });
+	InterpLocations.Add(FInterpLocation{ InterpComp4, 0 });
+	InterpLocations.Add(FInterpLocation{ InterpComp5, 0 });
+	InterpLocations.Add(FInterpLocation{ InterpComp6, 0 });
 }
 
 void AShooterCharacter::CameraInterpZoom(float DeltaTime)
@@ -383,15 +423,6 @@ void AShooterCharacter::IncremementOverlappedItemCount(int8 Amount)
 	else bShouldTraceForItems = true;
 }
 
-FVector AShooterCharacter::GetCameraInterpLocation()
-{
-	const FVector WorldLocation{ FollowCamera->GetComponentLocation() };
-	const FVector Forward{ FollowCamera->GetForwardVector() };
-
-
-	return WorldLocation + Forward * CameraInterpDistance + FVector(0.f, 0.f, CameraInterpElevation);
-}
-
 void AShooterCharacter::GetPickupItem(AItem* Item)
 {
 	Item->PlayEquipSound();
@@ -400,6 +431,18 @@ void AShooterCharacter::GetPickupItem(AItem* Item)
 	if (Weapon)
 	{
 		SwapWeapon(Weapon);
+	}
+
+	auto Ammo = Cast<AAmmo>(Item);
+	if (Ammo)
+	{
+		PickupAmmo(Ammo);
+		
+		/* If the EquippedWeapon uses this ammo type and it is empty, reload it */
+		if (EquippedWeapon->GetAmmoType() == Ammo->GetAmmoType() && EquippedWeapon->GetAmmoAmount() == 0)
+		{
+			ReloadWeapon();
+		}
 	}
 }
 
@@ -429,7 +472,6 @@ void AShooterCharacter::InteractStart(const FInputActionValue& value)
 	if (TraceHitItem)
 	{
 		TraceHitItem->StartItemCurve(this);
-		TraceHitItem->PlayPickupSound();
 	}
 }
 
@@ -603,8 +645,6 @@ void AShooterCharacter::ReloadWeapon()
 
 		PlayMontageSection(ReloadMontage, EquippedWeapon->GetReloadSectionName());
 	}
-
-	// Do we have ammo of the correct type?
 }
 
 void AShooterCharacter::FinishReloading()
@@ -629,6 +669,15 @@ void AShooterCharacter::FinishReloading()
 
 }
 
+FInterpLocation AShooterCharacter::GetInterpLocation(int32 Index)
+{
+	if (Index < InterpLocations.Num())
+	{
+		return InterpLocations[Index];
+	}
+	return FInterpLocation();
+}
+
 /*
 * Returns false if the PC does not have a weapon equipped
 * Returns false if the PC has 0 or no entry of the kind of ammo that the Equipped Weapon takes
@@ -650,10 +699,12 @@ bool AShooterCharacter::IsCarryingAmmo()
 /* Functions for reloading & moving the clip around */
 void AShooterCharacter::GrabClip()
 {
-	if (EquippedWeapon == nullptr) return;
+	if (EquippedWeapon == nullptr || HandSceneComponent == nullptr) return;
 
 	ClipTransform = EquippedWeapon->GetClipBoneTransform();
 
+	FAttachmentTransformRules AttachmentRules(EAttachmentRule::KeepRelative, true);
+	HandSceneComponent->AttachToComponent(GetMesh(), AttachmentRules, FName("Hand_L"));
 	HandSceneComponent->SetWorldTransform(ClipTransform);
 
 	EquippedWeapon->SetClipIsMoving(true);
@@ -666,5 +717,33 @@ void AShooterCharacter::ReleaseClip()
 
 
 	EquippedWeapon->SetClipIsMoving(false);
+}
+
+int32 AShooterCharacter::GetInterpLocationIndex()
+{
+	int32 LowestIndex = 1;
+	int32 LowestCount = INT_MAX;
+
+	for (int32 i = 1; i < InterpLocations.Num(); i++)
+	{
+		if (InterpLocations[i].ItemCount < LowestCount)
+		{
+			LowestIndex = i;
+			LowestCount = InterpLocations[i].ItemCount;
+		}
+	}
+
+	return LowestIndex;
+}
+
+void AShooterCharacter::UseInterpLocation(int32 Index)
+{
+	InterpLocations[Index].ItemCount += 1;
+}
+
+void AShooterCharacter::FreeInterpLocation(int32 Index)
+{
+	if (InterpLocations[Index].ItemCount > 0) InterpLocations[Index].ItemCount -= 1;
+	else UE_LOG(LogTemp, Warning, TEXT("AShooterCharacter::FreeInterpLocation() Tried to free index %i that was already at 0"), Index);
 }
 

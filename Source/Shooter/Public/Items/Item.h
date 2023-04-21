@@ -26,8 +26,15 @@ enum class EItemState : uint8
 	EIS_EquipInterping = 2 UMETA(DisplayName = "EquipInterping"),
 	EIS_PickedUp = 3 UMETA(DisplayName = "PickedUp"),
 	EIS_Falling = 4 UMETA(DisplayName = "Falling")
-
 };
+
+UENUM(BlueprintType)
+enum class EItemType : uint8
+{
+	EIT_Ammo = 0 UMETA(DisplayName = "Ammo"),
+	EIT_Weapon = 1 UMETA(DisplayName = "Weapon")
+};
+
 
 class UBoxComponent;
 class UWidgetComponent;
@@ -60,8 +67,16 @@ protected:
 	UFUNCTION()
 	void OnSphereEndOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
 
-	void SetItemProperties(EItemState State);
+	virtual void SetItemProperties(EItemState State);
 	void ItemInterp(float DeltaTime);
+	FVector GetInterpLocation();
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
+	UWidgetComponent* PickupWidget;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
+	EItemType ItemType = EItemType::EIT_Weapon;
+	
 
 private:
 	void FinishInterping();
@@ -73,9 +88,6 @@ private:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
 	UBoxComponent* CollisionBox;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
-	UWidgetComponent* PickupWidget;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
 	USphereComponent* AreaSphere;
@@ -92,7 +104,7 @@ private:
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
 	EItemState ItemState = EItemState::EIS_Pickup;
-	
+
 	/* Setting the behavior when picking up items */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
 	UCurveFloat* ItemZCurve;
@@ -128,6 +140,15 @@ private:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
 	USoundCue* EquipSound;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
+	int32 InterpLocIndex = 0;
+
+	// This stuff is only useful in the case that I create a singleton that is solely responsible for playing sounds. Then it can manage this info
+	//FTimerHandle PickupSoundTimer;
+	//float PickupSoundTimeout = 0.5f;
+	//FTimerHandle EquipSoundTimer;
+	//float EquipSoundTimeout = 0.5f;
 
 
 public:
@@ -135,5 +156,9 @@ public:
 	FORCEINLINE int32 GetItemCount() const { return ItemCount; }
 	FORCEINLINE EItemRarity GetItemRarity() const { return ItemRarity; }
 	FORCEINLINE EItemState GetItemState() const { return ItemState; }
+	FORCEINLINE EItemType GetItemType() const { return ItemType; }
 	FORCEINLINE USkeletalMeshComponent* GetItemMesh() const { return ItemMesh; }
+	FORCEINLINE UBoxComponent* GetCollisionBox() const { return CollisionBox; }
+	FORCEINLINE UWidgetComponent* GetPickupWidget() const { return PickupWidget; }
+	FORCEINLINE USphereComponent* GetAreaSphere() const { return AreaSphere; }
 };
