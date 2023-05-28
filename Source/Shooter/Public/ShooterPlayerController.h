@@ -27,4 +27,7 @@ private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Widget", meta = (AllowPrivateAccess = "true"))
 	UUserWidget* HUDOverlay;
+
+public:
+	FORCEINLINE UUserWidget* GetOverlay() const { return HUDOverlay; }
 };

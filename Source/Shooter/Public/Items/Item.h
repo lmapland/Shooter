@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Engine/DataTable.h"
 #include "Item.generated.h"
 
 UENUM(BlueprintType)
@@ -35,13 +36,38 @@ enum class EItemType : uint8
 	EIT_Weapon = 1 UMETA(DisplayName = "Weapon")
 };
 
+USTRUCT(BlueprintType)
+struct FItemRarityTable : public FTableRowBase
+{
+	GENERATED_BODY()
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FLinearColor GlowColor;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FLinearColor LightColor;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FLinearColor DarkColor;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 NumberOfStars;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	UTexture2D* IconBackground;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	int32 CustomDepthStencil;
+};
+
 
 class UBoxComponent;
 class UWidgetComponent;
 class USphereComponent;
 class AShooterCharacter;
 class USoundCue;
-
+class UCurveVector;
+class UDataTable;
 
 UCLASS()
 class SHOOTER_API AItem : public AActor
@@ -55,7 +81,10 @@ public:
 	void SetItemState(EItemState State);
 	void StartItemCurve(AShooterCharacter* Char);
 	void PlayPickupSound();
-	void PlayEquipSound();
+	virtual void EnableCustomDepth();
+	virtual void DisableCustomDepth();
+	void SetGlowMaterialEnabled(bool bValue);
+	virtual void SetCharacterInventoryFull(bool bIsFull);
 
 protected:
 	virtual void BeginPlay() override;
@@ -69,28 +98,37 @@ protected:
 
 	virtual void SetItemProperties(EItemState State);
 	void ItemInterp(float DeltaTime);
+
+	virtual void InitializeCustomDepth();
+	virtual void OnConstruction(const FTransform& Transform) override;
+	void UpdatePulse();
+	void StartPulseTimer();
+	void PlaySound(USoundCue* SoundToPlay);
+
 	FVector GetInterpLocation();
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
 	UWidgetComponent* PickupWidget;
 	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
+	USoundCue* PickupSound;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
 	EItemType ItemType = EItemType::EIT_Weapon;
+
+	FItemRarityTable* RarityRecord;
 	
-
-private:
-	void FinishInterping();
-	void PlaySound(USoundCue* SoundToPlay);
-
-	/* Components of an Item */
+	/* Dynamic Instance we can change at runtime */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
-	USkeletalMeshComponent* ItemMesh;
+	UMaterialInstanceDynamic* DynamicMaterialInstance;
+	
+	// Because an item may have more than 1 material and this indicates which material needs changed
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
+	int32 MaterialIndex = 0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
-	UBoxComponent* CollisionBox;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
-	USphereComponent* AreaSphere;
+	/* Material instance used with the Dyanmic Material */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
+	UMaterialInstance* MaterialInstance;
 
 	/* Details of an item */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
@@ -104,6 +142,23 @@ private:
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
 	EItemState ItemState = EItemState::EIS_Pickup;
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
+	UTexture2D* InventoryIcon;
+
+private:
+	void FinishInterping();
+	void ResetPulseTimer();
+
+	/* Components of an Item */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
+	USkeletalMeshComponent* ItemMesh;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
+	UBoxComponent* CollisionBox;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
+	USphereComponent* AreaSphere;
 
 	/* Setting the behavior when picking up items */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
@@ -126,30 +181,49 @@ private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
 	AShooterCharacter* Character;
 
-	//float ItemInterpX = 0.f;
-	//float ItemInterpY = 0.f;
-
 	/* Offset between the camera and the interping item */
 	float InterpInitialYawOffset = 0.f;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
 	UCurveFloat* ItemScaleCurve;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
-	USoundCue* PickupSound;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickup", meta = (AllowPrivateAccess = "true"))
-	USoundCue* EquipSound;
-	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
 	int32 InterpLocIndex = 0;
+
+	bool bCanChangeCustomDepth = true;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
+	UCurveVector* PulseCurve;
+
+	FTimerHandle PulseTimer;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
+	float PulseCurveTime = 5.f;
+
+	UPROPERTY(VisibleAnywhere, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
+	float GlowAmount = 150.f;
+	
+	UPROPERTY(VisibleAnywhere, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
+	float FresnelExponent = 3.f;
+	
+	UPROPERTY(VisibleAnywhere, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
+	float FresnelReflectFraction = 4.f;
+
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
+	UCurveVector* InterpPulseCurve;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Item Properties", meta = (AllowPrivateAccess = "true"))
+	int32 SlotIndex = 0;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "DataTable", meta = (AllowPrivateAccess = "true"))
+	UDataTable* ItemRarityDataTable;
 
 	// This stuff is only useful in the case that I create a singleton that is solely responsible for playing sounds. Then it can manage this info
 	//FTimerHandle PickupSoundTimer;
 	//float PickupSoundTimeout = 0.5f;
 	//FTimerHandle EquipSoundTimer;
 	//float EquipSoundTimeout = 0.5f;
-
 
 public:
 	FORCEINLINE FString GetItemName() const { return ItemName; }
@@ -161,4 +235,14 @@ public:
 	FORCEINLINE UBoxComponent* GetCollisionBox() const { return CollisionBox; }
 	FORCEINLINE UWidgetComponent* GetPickupWidget() const { return PickupWidget; }
 	FORCEINLINE USphereComponent* GetAreaSphere() const { return AreaSphere; }
+	FORCEINLINE int32 GetSlotIndex() const { return SlotIndex; }
+	FORCEINLINE void SetSlotIndex(int32 Index) { SlotIndex = Index; }
+	FORCEINLINE FLinearColor GetGlowColor() const { return RarityRecord == nullptr ? FLinearColor::Red : RarityRecord->GlowColor; }
+	FORCEINLINE FLinearColor GetLightColor() const { return RarityRecord == nullptr ? FLinearColor::Red : RarityRecord->LightColor; }
+	FORCEINLINE FLinearColor GetDarkColor() const { return RarityRecord == nullptr ? FLinearColor::Red : RarityRecord->DarkColor; }
+	FORCEINLINE int32 GetNumberOfStars() const { return RarityRecord == nullptr ? -1 : RarityRecord->NumberOfStars; }
+	FORCEINLINE int32 GetCustomDepthStencil() const { return RarityRecord == nullptr ? -1 : RarityRecord->CustomDepthStencil; }
+
+	UFUNCTION(BlueprintCallable)
+	FORCEINLINE UTexture2D* GetIconBackground() const { return RarityRecord == nullptr ? nullptr : RarityRecord->IconBackground; }
 };

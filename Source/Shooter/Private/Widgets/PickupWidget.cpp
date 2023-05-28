@@ -9,6 +9,7 @@
 void UPickupWidget::Setup(AItem* InItem)
 {
 	ItemReference = InItem;
+	UpdateAmmoImage(AmmoType);
 
 	/* Set the Item Name and Count */
 	if (ItemNameText) ItemNameText->SetText(FText::FromString(InItem->GetItemName()));
@@ -27,3 +28,33 @@ void UPickupWidget::Setup(AItem* InItem)
 		else Stars[(uint8)Rarity]->SetOpacity(0.25f);
 	}
 }
+
+void UPickupWidget::UpdatePickupText()
+{
+	if (IconLabelText)
+	{
+		IconLabelText->SetText(FText::FromString("Swap"));
+	}
+}
+
+void UPickupWidget::SetRightUpperBG(FLinearColor Color)
+{
+	if (RightUpperBG)
+	{
+		RightUpperBG->SetColorAndOpacity(Color);
+	}
+}
+
+void UPickupWidget::SetRightLowerBG(FLinearColor Color)
+{
+	if (RightLowerBG)
+	{
+		RightLowerBG->SetColorAndOpacity(Color);
+	}
+}
+
+/*void UPickupWidget::SetAmmoType(EAmmoType Ammo)
+{
+	AmmoType = Ammo;
+	UpdateAmmoImage();
+}*/

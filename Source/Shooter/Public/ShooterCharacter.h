@@ -13,7 +13,8 @@ enum class ECombatState : uint8
 {
 	ECS_Unoccupied = 0 UMETA(DisplayName = "Unoccupied"),
 	ECS_FireTimerInProgress = 1 UMETA(DisplayName = "FireTimerInProgress"),
-	ECS_Reloading = 2 UMETA(DisplayName = "Reloading")
+	ECS_Reloading = 2 UMETA(DisplayName = "Reloading"),
+	ECS_Equipping = 3 UMETA(DisplayName = "Equipping")
 };
 
 USTRUCT(BlueprintType)
@@ -28,12 +29,16 @@ struct FInterpLocation
 	int32 ItemCount;
 };
 
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FEquipItemDelegate, int32, CurrentSlotIndex, int32, NewSlotIndex);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FHighlightIconDelegate, int32, SlotIndex, bool, bStartAnimation);
+
 class USpringArmComponent;
 class UInputComponent;
 class UCameraComponent;
 class UInputMappingContext;
 class UInputAction;
 class APlayerController;
+class AShooterPlayerController;
 class USoundBase;
 class UParticleSystem;
 class UAnimMontage;
@@ -41,6 +46,7 @@ class AItem;
 class AWeapon;
 class AAmmo;
 class UCurveFloat;
+class UShooterOverlay;
 
 UCLASS()
 class SHOOTER_API AShooterCharacter : public ACharacter
@@ -65,11 +71,15 @@ public:
 
 	UFUNCTION(BlueprintCallable)
 	void FinishReloading();
+	
+	UFUNCTION(BlueprintCallable)
+	void FinishEquipping();
 
 	FInterpLocation GetInterpLocation(int32 Index);
 	int32 GetInterpLocationIndex();
 	void UseInterpLocation(int32 Index);
 	void FreeInterpLocation(int32 Index);
+	void UnHighlightSlot();
 
 
 protected:
@@ -110,7 +120,8 @@ protected:
 
 	AWeapon* SpawnDefaultWeapon();
 	void EquipWeapon(AWeapon* ToEquip);
-	void DropWeapon();
+	void UnequipWeapon(AWeapon* ToUnequip);
+	void DropWeapon(AWeapon* WeaponToDrop);
 	void SwapWeapon(AWeapon* WeaponToSwap);
 	void InitializeAmmoMap();
 	bool WeaponHasAmmo();
@@ -155,6 +166,26 @@ protected:
 	
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* CrouchAction; // l-shift
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* FAction; // 
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* Action1; // 
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* Action2; // 
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* Action3; // 
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* Action4; // 
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
+	UInputAction* Action5; // 
+
+
 
 	
 	/* Zooming */
@@ -170,11 +201,6 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input")
 	float TargetArmLength = 200.f;
 
-	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = Combat)
-	USoundBase* FireSound;
-
-
 private:
 	void TraceForItems();
 	void TurnOffPickupWidget();
@@ -183,6 +209,16 @@ private:
 	void StopAiming();
 	void PickupAmmo(AAmmo* Ammo);
 	void InitializeInterpLocations();
+	void FKeyPressed();
+	void Key1Pressed();
+	void Key2Pressed();
+	void Key3Pressed();
+	void Key4Pressed();
+	void Key5Pressed();
+	void SetWeaponInSlotActive(int32 SlotID);
+	void AddItemToInventory(AItem* ToAdd);
+	void AddItemToInventoryAtSlot(AItem* ItemToAdd, int32 SlotID);
+	int32 GetEmptyInventorySlot();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
 	USpringArmComponent* CameraBoom;
@@ -192,9 +228,6 @@ private:
 	
 	UPROPERTY()
 	APlayerController* PlayerController;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (AllowPrivateAccess = "true"))
-	UParticleSystem* MuzzleFlash;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (AllowPrivateAccess = "true"))
 	UAnimMontage* HipFireMontage;
@@ -272,7 +305,6 @@ private:
 	/* Auto fire */
 	bool bFireButtonPressed = false;
 	bool bShouldFire = true; // bool while timer is running
-	float AutomaticFireRate = 0.1f; // seconds between bullets firing
 	FTimerHandle AutoFireTimer;
 
 	/* true if we should trace every frame */
@@ -312,6 +344,9 @@ private:
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (AllowPrivateAccess = "true"))
 	UAnimMontage* ReloadMontage;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	UAnimMontage* EquipMontage;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
 	FTransform ClipTransform;
@@ -371,11 +406,27 @@ private:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"))
 	TArray<FInterpLocation> InterpLocations;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Inventory, meta = (AllowPrivateAccess = "true"))
+	TArray<AItem*> Inventory;
+
+	const int32 InventoryCapacity = 6;
+
+	AShooterPlayerController* ShooterController;
+
+	UShooterOverlay* ShooterOverlay;
+
+	UPROPERTY(BlueprintAssignable, Category = Delegates, meta = (AllowPrivateAccess = "true"))
+	FEquipItemDelegate EquipItemDelegate;
+
+	UPROPERTY(BlueprintAssignable, Category = Delegates, meta = (AllowPrivateAccess = "true"))
+	FHighlightIconDelegate HighlightIconDelegate;
+
 public:
 	FORCEINLINE bool GetAiming() const { return bAiming; }
 	FORCEINLINE int8 GetOverlappedItemCount() const { return OverlappedItemCount; }
 	FORCEINLINE UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 	FORCEINLINE ECombatState GetCombatState() const { return CombatState; }
 	FORCEINLINE bool GetCrouching() const { return bCrouching; }
+	FORCEINLINE AWeapon* GetEquippedWeapon() const { return EquippedWeapon; }
 
 };

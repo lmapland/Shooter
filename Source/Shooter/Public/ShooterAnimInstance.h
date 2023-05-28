@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Animation/AnimInstance.h"
+#include "WeaponType.h"
 #include "ShooterAnimInstance.generated.h"
 
 UENUM(BlueprintType)
@@ -87,9 +88,17 @@ private:
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Crouching", meta = (AllowPrivateAccess = "true"))
 	bool bCrouching = false;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Crouching", meta = (AllowPrivateAccess = "true"))
+	bool bEquipping = false;
 
 	/* Recoiling looks weird when character is turning in place. We want it on when the character is standing still, though */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Recoil", meta = (AllowPrivateAccess = "true"))
 	float RecoilWeight = 1.f;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	EWeaponType WeaponType;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	bool bShouldUseFABRIK = true;
 };

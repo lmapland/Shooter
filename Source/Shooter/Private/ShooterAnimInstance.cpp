@@ -5,6 +5,7 @@
 #include "ShooterCharacter.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Items/Weapon.h"
 
 void UShooterAnimInstance::UpdateAnimationProperties(float DeltaTime)
 {
@@ -19,6 +20,8 @@ void UShooterAnimInstance::UpdateAnimationProperties(float DeltaTime)
 		bIsReloading = ShooterCharacter->GetCombatState() == ECombatState::ECS_Reloading;
 		bIsInAir = ShooterCharacter->GetCharacterMovement()->IsFalling();
 		bAiming = ShooterCharacter->GetAiming();
+		bEquipping = ShooterCharacter->GetCombatState() == ECombatState::ECS_Equipping;
+		bShouldUseFABRIK = ShooterCharacter->GetCombatState() == ECombatState::ECS_Reloading || ShooterCharacter->GetCombatState() == ECombatState::ECS_Equipping ? false : true;
 
 		if (ShooterCharacter->GetCharacterMovement()->GetCurrentAcceleration().Size() > 0.f) bIsAccelerating = true;
 		else bIsAccelerating = false;
@@ -35,6 +38,12 @@ void UShooterAnimInstance::UpdateAnimationProperties(float DeltaTime)
 		else if (bIsInAir) OffsetState = EOffsetState::EOS_InAir;
 		else if (bAiming) OffsetState = EOffsetState::EOS_Aiming;
 		else OffsetState = EOffsetState::EOS_Hip;
+
+		AWeapon* Weapon = ShooterCharacter->GetEquippedWeapon();
+		if (Weapon)
+		{
+			WeaponType = Weapon->GetWeaponType();
+		}
 	}
 	TurnInPlace();
 	Lean(DeltaTime);
@@ -92,7 +101,7 @@ void UShooterAnimInstance::TurnInPlace()
 		}
 	}
 
-	if (bIsReloading || bAiming) RecoilWeight = 1.f;
+	if (bIsReloading || bAiming || bEquipping) RecoilWeight = 1.f;
 	else if (bCrouching) RecoilWeight = .1f;
 }
 

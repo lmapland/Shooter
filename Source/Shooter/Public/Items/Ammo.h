@@ -14,9 +14,12 @@ UCLASS()
 class SHOOTER_API AAmmo : public AItem
 {
 	GENERATED_BODY()
+
 public:
 	AAmmo();
 	virtual void Tick(float DeltaTime) override;
+	virtual void EnableCustomDepth() override;
+	virtual void DisableCustomDepth() override;
 
 protected:
 	virtual void BeginPlay() override;

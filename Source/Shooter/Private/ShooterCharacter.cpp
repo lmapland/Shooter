@@ -12,6 +12,8 @@
 #include "Engine/SkeletalMeshSocket.h"
 #include "DrawDebugHelpers.h"
 #include "particles/ParticleSystemComponent.h"
+#include "ShooterPlayerController.h"
+#include "Widgets/ShooterOverlay.h"
 #include "Items/Item.h"
 #include "Items/Weapon.h"
 #include "Items/Ammo.h"
@@ -74,18 +76,34 @@ void AShooterCharacter::BeginPlay()
 		CameraCurrentFOV = CameraDefaultFOV;
 	}
 
-	EquipWeapon(SpawnDefaultWeapon());
-
 	PlayerController = Cast<APlayerController>(GetController());
 
 	if (PlayerController)
 	{
+		/* Setup Enhanced Input */
 		UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer());
 		if (Subsystem)
 		{
 			Subsystem->AddMappingContext(CharMappingContext, 0);
 		}
+
+		/* Get handle to Overlay*/
+		if (AShooterPlayerController* PCC = Cast<AShooterPlayerController>(PlayerController))
+		{
+			ShooterController = PCC;
+			UUserWidget* Overlay = ShooterController->GetOverlay();
+			if (UShooterOverlay* SOverlay = Cast<UShooterOverlay>(Overlay))
+			{
+				ShooterOverlay = SOverlay;
+				UE_LOG(LogTemp, Warning, TEXT("BeginPlay(): ShooterOverlay set"));
+			}
+		}
 	}
+
+	EquipWeapon(SpawnDefaultWeapon());
+	AddItemToInventory(EquippedWeapon);
+	EquippedWeapon->DisableCustomDepth(); // TODO I would expect both these statements to be required when setting a weapon active
+	EquippedWeapon->SetGlowMaterialEnabled(false);
 
 	InitializeAmmoMap();
 	GetCharacterMovement()->MaxWalkSpeed = BaseMovementSpeed;
@@ -125,11 +143,25 @@ void AShooterCharacter::TraceForItems()
 		TraceHitItem = Cast<AItem>(ItemTraceResult.GetActor());
 		if (TraceHitItem)
 		{
+			if (TraceHitItem->GetItemState() == EItemState::EIS_EquipInterping)
+			{
+				TraceHitItem = nullptr;
+				return;
+			}
 			if (PreviousMousedOverItem != TraceHitItem)
 			{
+				if (PreviousMousedOverItem) PreviousMousedOverItem->DisableCustomDepth();
+
 				TurnOffPickupWidget();
+				TraceHitItem->EnableCustomDepth();
+				if (Inventory.Num() >= InventoryCapacity) TraceHitItem->SetCharacterInventoryFull(true);
 				TraceHitItem->SetPickupWidgetVisibility(true);
 				PreviousMousedOverItem = TraceHitItem;
+
+				if (AWeapon* TraceWeapon = Cast<AWeapon>(ItemTraceResult.GetActor()))
+				{
+					HighlightIconDelegate.Broadcast(GetEmptyInventorySlot(), true);
+				}
 			}
 		}
 		else TurnOffPickupWidget();
@@ -142,7 +174,9 @@ void AShooterCharacter::TurnOffPickupWidget()
 	if (PreviousMousedOverItem != nullptr)
 	{
 		PreviousMousedOverItem->SetPickupWidgetVisibility(false);
+		PreviousMousedOverItem->DisableCustomDepth();
 		PreviousMousedOverItem = nullptr;
+		UnHighlightSlot();
 	}
 }
 
@@ -200,6 +234,83 @@ void AShooterCharacter::InitializeInterpLocations()
 	InterpLocations.Add(FInterpLocation{ InterpComp4, 0 });
 	InterpLocations.Add(FInterpLocation{ InterpComp5, 0 });
 	InterpLocations.Add(FInterpLocation{ InterpComp6, 0 });
+}
+
+void AShooterCharacter::FKeyPressed()
+{
+	SetWeaponInSlotActive(0);
+}
+
+void AShooterCharacter::Key1Pressed()
+{
+	SetWeaponInSlotActive(1);
+}
+
+void AShooterCharacter::Key2Pressed()
+{
+	SetWeaponInSlotActive(2);
+}
+
+void AShooterCharacter::Key3Pressed()
+{
+	UE_LOG(LogTemp, Warning, TEXT("Key3Pressed()"));
+	SetWeaponInSlotActive(3);
+}
+
+void AShooterCharacter::Key4Pressed()
+{
+	SetWeaponInSlotActive(4);
+}
+
+void AShooterCharacter::Key5Pressed()
+{
+	SetWeaponInSlotActive(5);
+}
+
+void AShooterCharacter::SetWeaponInSlotActive(int32 SlotID) // ExchangeInventoryItems
+{
+	if (CombatState != ECombatState::ECS_Unoccupied) return;
+	if (EquippedWeapon->GetSlotIndex() == SlotID || SlotID < 0 || SlotID >= InventoryCapacity) return;
+	if (!Inventory.IsValidIndex(SlotID) || Inventory[SlotID] == nullptr) return;
+
+	if (GetAiming()) StopAiming();
+	AWeapon* NewWeapon = Cast<AWeapon>(Inventory[SlotID]);
+
+	UnequipWeapon(EquippedWeapon);
+	EquipWeapon(NewWeapon);
+
+	CombatState = ECombatState::ECS_Equipping;
+	PlayMontageSection(EquipMontage, FName("Equip"));
+	EquippedWeapon->PlayEquipSound();
+}
+
+void AShooterCharacter::AddItemToInventory(AItem* ToAdd)
+{
+	ToAdd->SetSlotIndex(Inventory.Num());
+	Inventory.Add(ToAdd);
+	ShooterOverlay->UpdateInventorySlot(Inventory.Num() - 1);
+	ToAdd->SetItemState(EItemState::EIS_PickedUp);
+}
+
+void AShooterCharacter::AddItemToInventoryAtSlot(AItem* ItemToAdd, int32 SlotID)
+{
+	if (!Inventory.IsValidIndex(SlotID) || Inventory[SlotID] == nullptr) return;
+
+	Inventory[SlotID] = ItemToAdd;
+	ItemToAdd->SetSlotIndex(SlotID);
+	ShooterOverlay->UpdateInventorySlot(SlotID);
+}
+
+int32 AShooterCharacter::GetEmptyInventorySlot()
+{
+	return Inventory.Num() == InventoryCapacity ? -1 : Inventory.Num();
+
+	/*for (int32 i = 0; i < InventoryCapacity; i++)
+	{
+		if (Inventory[i] == nullptr) return i;
+	}
+
+	return -1; // Inventory is full */
 }
 
 void AShooterCharacter::CameraInterpZoom(float DeltaTime)
@@ -296,33 +407,55 @@ AWeapon* AShooterCharacter::SpawnDefaultWeapon()
 void AShooterCharacter::EquipWeapon(AWeapon* ToEquip)
 {
 	//UE_LOG(LogTemp, Warning, TEXT("In EquipWeapon(), weapon state: %i"), (uint8)ToEquip->GetItemState());
-	if (ToEquip && ToEquip->GetItemState() == EItemState::EIS_Pickup)
+	if (ToEquip && (ToEquip->GetItemState() == EItemState::EIS_Pickup || ToEquip->GetItemState() == EItemState::EIS_PickedUp))
 	{
 		const USkeletalMeshSocket* HandSocket = GetMesh()->GetSocketByName(FName("RightHandSocket"));
 		if (HandSocket)
 		{
 			HandSocket->AttachActor(ToEquip, GetMesh());
 		}
+
+		if (EquippedWeapon == nullptr)
+		{
+			EquipItemDelegate.Broadcast(-1, ToEquip->GetSlotIndex());
+		}
+		else
+		{
+			if (EquippedWeapon->GetSlotIndex() != ToEquip->GetSlotIndex())
+			{
+				EquipItemDelegate.Broadcast(EquippedWeapon->GetSlotIndex(), ToEquip->GetSlotIndex());
+			}
+		}
+
 		EquippedWeapon = ToEquip;
 		EquippedWeapon->SetItemState(EItemState::EIS_Equipped);
 	}
 }
 
-void AShooterCharacter::DropWeapon()
+void AShooterCharacter::UnequipWeapon(AWeapon* ToUnequip)
 {
-	if (EquippedWeapon)
-	{
-		FDetachmentTransformRules DetachmentRules(EDetachmentRule::KeepWorld, true);
-		EquippedWeapon->GetItemMesh()->DetachFromComponent(DetachmentRules);
-		EquippedWeapon->SetItemState(EItemState::EIS_Falling);
-		EquippedWeapon->ThrowWeapon();
-	}
+	EquippedWeapon->SetItemState(EItemState::EIS_PickedUp);
+}
+
+void AShooterCharacter::DropWeapon(AWeapon* WeaponToDrop)
+{
+	FDetachmentTransformRules DetachmentRules(EDetachmentRule::KeepWorld, true);
+	WeaponToDrop->GetItemMesh()->DetachFromComponent(DetachmentRules);
+	WeaponToDrop->SetItemState(EItemState::EIS_Falling);
+	WeaponToDrop->ThrowWeapon();
+	/*
+	 * I considered a new RemoveItemFromInventorySlot(int32 SlotID) function but I wouldn't gain anything
+	 * because DropWeapon is only called in one place and AddItemToInventoryAtSlot() is called directly after.
+	 */
 }
 
 void AShooterCharacter::SwapWeapon(AWeapon* WeaponToSwap)
 {
-	DropWeapon();
+	WeaponToSwap->SetSlotIndex(EquippedWeapon->GetSlotIndex());
+	DropWeapon(EquippedWeapon);
 	EquipWeapon(WeaponToSwap);
+	AddItemToInventoryAtSlot(WeaponToSwap, EquippedWeapon->GetSlotIndex());
+
 	TraceHitItem = nullptr;
 	PreviousMousedOverItem = nullptr;
 }
@@ -358,7 +491,7 @@ void AShooterCharacter::StartFireTimer()
 {
 	CombatState = ECombatState::ECS_FireTimerInProgress;
 
-	GetWorldTimerManager().SetTimer(AutoFireTimer, this, &AShooterCharacter::AutoFireReset, AutomaticFireRate);
+	GetWorldTimerManager().SetTimer(AutoFireTimer, this, &AShooterCharacter::AutoFireReset, EquippedWeapon->GetAutomaticFireRate());
 }
 
 void AShooterCharacter::AutoFireReset()
@@ -371,7 +504,7 @@ void AShooterCharacter::AutoFireReset()
 	}
 	else
 	{
-		if (bFireButtonPressed) FireWeapon();
+		if (bFireButtonPressed && EquippedWeapon->CanAutoFire()) FireWeapon();
 	}
 }
 
@@ -399,6 +532,14 @@ void AShooterCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCo
 		EnhancedInputComponent->BindAction(InteractAction, ETriggerEvent::Completed, this, &AShooterCharacter::Interact);
 		EnhancedInputComponent->BindAction(ReloadAction, ETriggerEvent::Triggered, this, &AShooterCharacter::ReloadButtonPressed);
 		EnhancedInputComponent->BindAction(CrouchAction, ETriggerEvent::Started, this, &AShooterCharacter::CrouchButtonPressed);
+
+		/* For using the inventory hot bar */
+		EnhancedInputComponent->BindAction(FAction, ETriggerEvent::Started, this, &AShooterCharacter::FKeyPressed);
+		EnhancedInputComponent->BindAction(Action1, ETriggerEvent::Started, this, &AShooterCharacter::Key1Pressed);
+		EnhancedInputComponent->BindAction(Action2, ETriggerEvent::Started, this, &AShooterCharacter::Key2Pressed);
+		EnhancedInputComponent->BindAction(Action3, ETriggerEvent::Started, this, &AShooterCharacter::Key3Pressed);
+		EnhancedInputComponent->BindAction(Action4, ETriggerEvent::Started, this, &AShooterCharacter::Key4Pressed);
+		EnhancedInputComponent->BindAction(Action5, ETriggerEvent::Started, this, &AShooterCharacter::Key5Pressed);
 		/*EnhancedInputComponent->BindAction(OpenEverythingMenuAction, ETriggerEvent::Completed, this, &ASlashCharacter::OpenEverythingMenu);
 
 		EnhancedInputComponent->BindAction(BlockAction, ETriggerEvent::Started, this, &ASlashCharacter::Block);
@@ -425,12 +566,22 @@ void AShooterCharacter::IncremementOverlappedItemCount(int8 Amount)
 
 void AShooterCharacter::GetPickupItem(AItem* Item)
 {
-	Item->PlayEquipSound();
+	//Item->PlayEquipSound(); // TODO why does Item have an "Equip" sound? It should have a "Pickup" sound
 
 	auto Weapon = Cast<AWeapon>(Item);
 	if (Weapon)
 	{
-		SwapWeapon(Weapon);
+		if (Inventory.Num() < InventoryCapacity)
+		{
+			AddItemToInventory(Weapon);
+			HighlightIconDelegate.Broadcast(Weapon->GetSlotIndex(), false);
+		}
+		else
+		{
+			SwapWeapon(Weapon);
+		}
+
+		return;
 	}
 
 	auto Ammo = Cast<AAmmo>(Item);
@@ -469,9 +620,12 @@ void AShooterCharacter::Look(const FInputActionValue& Value)
 
 void AShooterCharacter::InteractStart(const FInputActionValue& value)
 {
+	if (CombatState != ECombatState::ECS_Unoccupied) return;
+
 	if (TraceHitItem)
 	{
 		TraceHitItem->StartItemCurve(this);
+		TraceHitItem = nullptr;
 	}
 }
 
@@ -519,10 +673,12 @@ void AShooterCharacter::FireWeapon()
 {
 	if (EquippedWeapon == nullptr || !WeaponHasAmmo() || CombatState != ECombatState::ECS_Unoccupied) return;
 	
-	PlaySound(FireSound);
+	PlaySound(EquippedWeapon->GetFireSound());
 	SendBullet();
 	PlayMontageSection(HipFireMontage, FName("StartFire"));
-	EquippedWeapon->DecrementAmmo();
+	EquippedWeapon->Fire();
+	//EquippedWeapon->DecrementAmmo();
+	ShooterOverlay->UpdateInventorySlot(EquippedWeapon->GetSlotIndex());
 
 	StartFireTimer();
 }
@@ -594,7 +750,7 @@ void AShooterCharacter::SendBullet()
 	{
 		const FTransform SocketTransform = BarrelSocket->GetSocketTransform(EquippedWeapon->GetItemMesh());
 
-		PlayCascadeParticles(MuzzleFlash, SocketTransform);
+		PlayCascadeParticles(EquippedWeapon->GetMuzzleFlash(), SocketTransform);
 		
 		FVector BeamEnd;
 		bool bBeamEnd = GetBeamEndLocation(SocketTransform.GetLocation(), BeamEnd);
@@ -618,7 +774,7 @@ void AShooterCharacter::AimingButtonPressed()
 {
 	bAimingButtonPressed = true;
 
-	if (CombatState != ECombatState::ECS_Reloading)	Aim();
+	if (CombatState != ECombatState::ECS_Reloading && CombatState != ECombatState::ECS_Equipping) Aim();
 }
 
 void AShooterCharacter::AimingButtonReleased()
@@ -665,8 +821,15 @@ void AShooterCharacter::FinishReloading()
 		AmmoMap[AmmoType] = AmmoMap[AmmoType] - AmmoToAdd;
 	}
 
-	if (bAimingButtonPressed) Aim();
+	ShooterOverlay->UpdateInventorySlot(EquippedWeapon->GetSlotIndex());
 
+	if (bAimingButtonPressed) Aim();
+}
+
+void AShooterCharacter::FinishEquipping()
+{
+	CombatState = ECombatState::ECS_Unoccupied;
+	if (bAimingButtonPressed) Aim();
 }
 
 FInterpLocation AShooterCharacter::GetInterpLocation(int32 Index)
@@ -745,5 +908,10 @@ void AShooterCharacter::FreeInterpLocation(int32 Index)
 {
 	if (InterpLocations[Index].ItemCount > 0) InterpLocations[Index].ItemCount -= 1;
 	else UE_LOG(LogTemp, Warning, TEXT("AShooterCharacter::FreeInterpLocation() Tried to free index %i that was already at 0"), Index);
+}
+
+void AShooterCharacter::UnHighlightSlot()
+{
+	HighlightIconDelegate.Broadcast(GetEmptyInventorySlot(), false);
 }
 
