@@ -12,11 +12,16 @@
 #include "Engine/SkeletalMeshSocket.h"
 #include "DrawDebugHelpers.h"
 #include "particles/ParticleSystemComponent.h"
+#include "NiagaraFunctionLibrary.h"
 #include "ShooterPlayerController.h"
 #include "Widgets/ShooterOverlay.h"
 #include "Items/Item.h"
 #include "Items/Weapon.h"
 #include "Items/Ammo.h"
+#include "Interfaces/BulletHitInterface.h"
+#include "Enemies/Enemy.h"
+#include "Enemies/EnemyController.h"
+#include "BehaviorTree/BlackboardComponent.h"
 
 // Sets default values
 AShooterCharacter::AShooterCharacter()
@@ -95,7 +100,6 @@ void AShooterCharacter::BeginPlay()
 			if (UShooterOverlay* SOverlay = Cast<UShooterOverlay>(Overlay))
 			{
 				ShooterOverlay = SOverlay;
-				UE_LOG(LogTemp, Warning, TEXT("BeginPlay(): ShooterOverlay set"));
 			}
 		}
 	}
@@ -108,6 +112,7 @@ void AShooterCharacter::BeginPlay()
 	InitializeAmmoMap();
 	GetCharacterMovement()->MaxWalkSpeed = BaseMovementSpeed;
 	InitializeInterpLocations();
+	ShooterOverlay->UpdateHealthBar(Health / MaxHealth);
 }
 
 void AShooterCharacter::Jump()
@@ -313,6 +318,12 @@ int32 AShooterCharacter::GetEmptyInventorySlot()
 	return -1; // Inventory is full */
 }
 
+void AShooterCharacter::HealthChanged()
+{
+	float TempHealth = Health / MaxHealth;
+	// need a UpdateHealthBar(TempHealth); function on an Overlay class
+}
+
 void AShooterCharacter::CameraInterpZoom(float DeltaTime)
 {
 	if (bAiming)
@@ -496,6 +507,8 @@ void AShooterCharacter::StartFireTimer()
 
 void AShooterCharacter::AutoFireReset()
 {
+	if (CombatState == ECombatState::ECS_Stunned) return;
+
 	CombatState = ECombatState::ECS_Unoccupied;
 
 	if (!WeaponHasAmmo())
@@ -683,8 +696,9 @@ void AShooterCharacter::FireWeapon()
 	StartFireTimer();
 }
 
-bool AShooterCharacter::GetBeamEndLocation(const FVector& MuzzleSocketLocation, FVector& OutBeamLocation)
+bool AShooterCharacter::GetBeamEndLocation(const FVector& MuzzleSocketLocation, FHitResult& OutHitResult)
 {
+	FVector OutBeamLocation;
 	FHitResult CrosshairHitResult;
 	bool bCrosshairHit = TraceUnderCrosshairs(CrosshairHitResult, OutBeamLocation);
 	if (bCrosshairHit)
@@ -693,18 +707,17 @@ bool AShooterCharacter::GetBeamEndLocation(const FVector& MuzzleSocketLocation, 
 	}
 
 	// Perform a second trace, but from the gun barrel
-	FHitResult WeaponTraceHit;
 	const FVector WeaponTraceStart{ MuzzleSocketLocation };
 	const FVector StartToEnd{ OutBeamLocation - MuzzleSocketLocation };
 	const FVector WeaponTraceEnd{ MuzzleSocketLocation + StartToEnd * 1.25f };
-	GetWorld()->LineTraceSingleByChannel(WeaponTraceHit, WeaponTraceStart, WeaponTraceEnd, ECollisionChannel::ECC_Visibility);
+	GetWorld()->LineTraceSingleByChannel(OutHitResult, WeaponTraceStart, WeaponTraceEnd, ECollisionChannel::ECC_Visibility);
 
-	if (WeaponTraceHit.bBlockingHit)
+	if (!OutHitResult.bBlockingHit)
 	{
-		OutBeamLocation = WeaponTraceHit.Location;
-		return true;
+		OutHitResult.Location = OutBeamLocation;
+		return false;
 	}
-	return false;
+	return true;
 }
 
 void AShooterCharacter::PlaySound(USoundBase* SoundToPlay)
@@ -752,18 +765,35 @@ void AShooterCharacter::SendBullet()
 
 		PlayCascadeParticles(EquippedWeapon->GetMuzzleFlash(), SocketTransform);
 		
-		FVector BeamEnd;
-		bool bBeamEnd = GetBeamEndLocation(SocketTransform.GetLocation(), BeamEnd);
+		FHitResult HitResult;
+		bool bBeamEnd = GetBeamEndLocation(SocketTransform.GetLocation(), HitResult);
 		if (bBeamEnd)
 		{
-			PlayCascadeParticles(ImpactParticles, BeamEnd);
-
+			/* Only play particles if the actor does not have their own particles to play */
+			if (HitResult.GetActor())
+			{
+				IBulletHitInterface* BulletHitInterface = Cast<IBulletHitInterface>(HitResult.GetActor());
+				if (BulletHitInterface)
+				{
+					BulletHitInterface->BulletHit_Implementation(HitResult);
+					if (AEnemy* HitEnemy = Cast <AEnemy>(HitResult.GetActor()))
+					{
+						bool bIsHeadShot = HitResult.BoneName.ToString() == HitEnemy->GetHeadBoneName();
+						float HitDamage = bIsHeadShot ? EquippedWeapon->GetHeadShotDamage() : EquippedWeapon->GetDamage();
+						UGameplayStatics::ApplyDamage(HitEnemy, HitDamage, PlayerController, this, UDamageType::StaticClass());
+						HitEnemy->ShowHitNumber(HitDamage, bIsHeadShot);
+					}
+				}
+				else if (ImpactParticles) PlayCascadeParticles(ImpactParticles, HitResult.Location);
+			}
+			else if (ImpactParticles) PlayCascadeParticles(ImpactParticles, HitResult.Location);
+			
 			if (BeamParticles)
 			{
 				UParticleSystemComponent* Beam = UGameplayStatics::SpawnEmitterAtLocation(GetWorld(), BeamParticles, SocketTransform);
 				if (Beam)
 				{
-					Beam->SetVectorParameter(FName("Target"), BeamEnd);
+					Beam->SetVectorParameter(FName("Target"), HitResult.Location);
 				}
 			}
 		}
@@ -774,7 +804,7 @@ void AShooterCharacter::AimingButtonPressed()
 {
 	bAimingButtonPressed = true;
 
-	if (CombatState != ECombatState::ECS_Reloading && CombatState != ECombatState::ECS_Equipping) Aim();
+	if (CombatState != ECombatState::ECS_Reloading && CombatState != ECombatState::ECS_Equipping && CombatState != ECombatState::ECS_Stunned) Aim();
 }
 
 void AShooterCharacter::AimingButtonReleased()
@@ -805,6 +835,7 @@ void AShooterCharacter::ReloadWeapon()
 
 void AShooterCharacter::FinishReloading()
 {
+	if (CombatState == ECombatState::ECS_Stunned) return;
 	CombatState = ECombatState::ECS_Unoccupied;
 
 	if (EquippedWeapon == nullptr) return;
@@ -828,6 +859,8 @@ void AShooterCharacter::FinishReloading()
 
 void AShooterCharacter::FinishEquipping()
 {
+	if (CombatState == ECombatState::ECS_Stunned) return;
+
 	CombatState = ECombatState::ECS_Unoccupied;
 	if (bAimingButtonPressed) Aim();
 }
@@ -859,6 +892,21 @@ bool AShooterCharacter::IsCarryingAmmo()
 	return false;
 }
 
+void AShooterCharacter::PlayStunMontage()
+{
+	const float RandStun = FMath::FRandRange(0.f, 1.f);
+	if (RandStun <= StunChance)
+	{
+		CombatState = ECombatState::ECS_Stunned;
+
+		UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+		if (AnimInstance && HitReactMontage)
+		{
+			AnimInstance->Montage_Play(HitReactMontage);
+		}
+	}
+}
+
 /* Functions for reloading & moving the clip around */
 void AShooterCharacter::GrabClip()
 {
@@ -880,6 +928,22 @@ void AShooterCharacter::ReleaseClip()
 
 
 	EquippedWeapon->SetClipIsMoving(false);
+}
+
+void AShooterCharacter::FinishStun()
+{
+	CombatState = ECombatState::ECS_Unoccupied;
+
+	if (bAimingButtonPressed)
+	{
+		Aim();
+	}
+}
+
+void AShooterCharacter::FinishDeath()
+{
+	GetMesh()->bPauseAnims = true;
+	if (PlayerController) DisableInput(PlayerController);
 }
 
 int32 AShooterCharacter::GetInterpLocationIndex()
@@ -913,5 +977,51 @@ void AShooterCharacter::FreeInterpLocation(int32 Index)
 void AShooterCharacter::UnHighlightSlot()
 {
 	HighlightIconDelegate.Broadcast(GetEmptyInventorySlot(), false);
+}
+
+void AShooterCharacter::PlayMeleeHitSound()
+{
+	if (MeleeImpactSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(GetWorld(), MeleeImpactSound, GetActorLocation());
+	}
+}
+
+void AShooterCharacter::Die()
+{
+	bDead = true;
+	PlayMontageSection(DeathMontage, FName(""));
+}
+
+void AShooterCharacter::PlayMeleeHitParticles(FVector HitLocation)
+{
+	if (BloodParticles)
+	{
+		UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), BloodParticles, HitLocation);
+	}
+}
+
+float AShooterCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
+{
+	if (Health == 0.f || bDead) return DamageAmount;
+
+	Health = FMath::Clamp(Health - DamageAmount, 0.f, MaxHealth);
+	ShooterOverlay->UpdateHealthBar(Health / MaxHealth);
+	PlayMeleeHitSound();
+
+	if (Health == 0.f)
+	{
+		AEnemyController* EnemyController = Cast<AEnemyController>(EventInstigator);
+		if (EnemyController)
+		{
+			EnemyController->GetBlackboardComponent()->SetValueAsBool(FName("CharacterDead"), true);
+			EnemyController->GetBlackboardComponent()->SetValueAsObject(FName("Target"), nullptr);
+			UE_LOG(LogTemp, Warning, TEXT("TakeDamage(): Setting CharacterDead"));
+		}
+		Die();
+	}
+	else PlayStunMontage();
+
+	return DamageAmount;
 }
 

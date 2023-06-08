@@ -14,7 +14,8 @@ enum class ECombatState : uint8
 	ECS_Unoccupied = 0 UMETA(DisplayName = "Unoccupied"),
 	ECS_FireTimerInProgress = 1 UMETA(DisplayName = "FireTimerInProgress"),
 	ECS_Reloading = 2 UMETA(DisplayName = "Reloading"),
-	ECS_Equipping = 3 UMETA(DisplayName = "Equipping")
+	ECS_Equipping = 3 UMETA(DisplayName = "Equipping"),
+	ECS_Stunned = 4 UMETA(DisplayName = "Stunned")
 };
 
 USTRUCT(BlueprintType)
@@ -47,6 +48,7 @@ class AWeapon;
 class AAmmo;
 class UCurveFloat;
 class UShooterOverlay;
+class UNiagaraSystem;
 
 UCLASS()
 class SHOOTER_API AShooterCharacter : public ACharacter
@@ -80,7 +82,8 @@ public:
 	void UseInterpLocation(int32 Index);
 	void FreeInterpLocation(int32 Index);
 	void UnHighlightSlot();
-
+	virtual float TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser) override;
+	void PlayMeleeHitParticles(FVector HitLocation);
 
 protected:
 	virtual void BeginPlay() override;
@@ -92,7 +95,7 @@ protected:
 	void ZoomOut();
 	void CrouchButtonPressed();
 	void FireWeapon();
-	bool GetBeamEndLocation(const FVector& MuzzleSocketLocation, FVector& OutBeamLocation);
+	bool GetBeamEndLocation(const FVector& MuzzleSocketLocation, FHitResult& OutHitResult);
 	void PlaySound(USoundBase* SoundToPlay);
 	void PlayMontageSection(UAnimMontage* Montage, FName SectionName);
 	void PlayCascadeParticles(UParticleSystem* ParticlesToPlay, FVector Location);
@@ -127,12 +130,19 @@ protected:
 	bool WeaponHasAmmo();
 	/* Do we have any ammo of the kind that our Equipped Weapon takes? */
 	bool IsCarryingAmmo();
+	void PlayStunMontage();
 
 	UFUNCTION(BlueprintCallable)
 	void GrabClip();
 	
 	UFUNCTION(BlueprintCallable)
 	void ReleaseClip();
+
+	UFUNCTION(BlueprintCallable)
+	void FinishStun();
+	
+	UFUNCTION(BlueprintCallable)
+	void FinishDeath();
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputMappingContext* CharMappingContext;
@@ -185,9 +195,6 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input")
 	UInputAction* Action5; // 
 
-
-
-	
 	/* Zooming */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Zoom")
 	float MinZoomLength;
@@ -200,6 +207,8 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Input")
 	float TargetArmLength = 200.f;
+
+	bool bDead = false;
 
 private:
 	void TraceForItems();
@@ -219,6 +228,9 @@ private:
 	void AddItemToInventory(AItem* ToAdd);
 	void AddItemToInventoryAtSlot(AItem* ItemToAdd, int32 SlotID);
 	int32 GetEmptyInventorySlot();
+	void HealthChanged();
+	void PlayMeleeHitSound();
+	void Die();
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera", meta = (AllowPrivateAccess = "true"))
 	USpringArmComponent* CameraBoom;
@@ -348,6 +360,12 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (AllowPrivateAccess = "true"))
 	UAnimMontage* EquipMontage;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	UAnimMontage* HitReactMontage;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	UAnimMontage* DeathMontage;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
 	FTransform ClipTransform;
 
@@ -421,6 +439,21 @@ private:
 	UPROPERTY(BlueprintAssignable, Category = Delegates, meta = (AllowPrivateAccess = "true"))
 	FHighlightIconDelegate HighlightIconDelegate;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	float Health = 100.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	float MaxHealth = 100.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	USoundBase* MeleeImpactSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	UNiagaraSystem* BloodParticles;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	float StunChance = .5f;
+
 public:
 	FORCEINLINE bool GetAiming() const { return bAiming; }
 	FORCEINLINE int8 GetOverlappedItemCount() const { return OverlappedItemCount; }
@@ -428,5 +461,4 @@ public:
 	FORCEINLINE ECombatState GetCombatState() const { return CombatState; }
 	FORCEINLINE bool GetCrouching() const { return bCrouching; }
 	FORCEINLINE AWeapon* GetEquippedWeapon() const { return EquippedWeapon; }
-
 };

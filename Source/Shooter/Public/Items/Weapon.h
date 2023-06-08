@@ -93,6 +93,12 @@ struct FWeaponDataTable : public FTableRowBase
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	bool bCanAutoFire;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float Damage;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	float HeadShotDamage;
 };
 
 /**
@@ -180,6 +186,8 @@ public:
 	FORCEINLINE float GetAutomaticFireRate() const { return AutomaticFireRate; }
 	FORCEINLINE USoundBase* GetFireSound() const { return WeaponRecord->FireSound; }
 	FORCEINLINE UParticleSystem* GetMuzzleFlash() const { return WeaponRecord->MuzzleFlash; }
+	FORCEINLINE float GetDamage() const { return WeaponRecord == nullptr ? 0 : WeaponRecord->Damage; }
+	FORCEINLINE float GetHeadShotDamage() const { return WeaponRecord == nullptr ? 0 : WeaponRecord->HeadShotDamage; }
 
 	UFUNCTION(BlueprintCallable)
 	FORCEINLINE UTexture2D* GetCrosshairsMiddle() const { return WeaponRecord == nullptr ? nullptr : WeaponRecord->CrosshairsMiddle; }

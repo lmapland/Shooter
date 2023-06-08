@@ -18,4 +18,6 @@ public:
 	UFUNCTION(BlueprintImplementableEvent)
 	void UpdateInventorySlot(int32 SlotID);
 
+	UFUNCTION(BlueprintImplementableEvent)
+	void UpdateHealthBar(float Percent);
 };
